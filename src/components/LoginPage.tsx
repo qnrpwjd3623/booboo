@@ -137,7 +137,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         {/* Footer */}
         <p className="text-center text-xs text-gray-400 mt-6">
           <Heart className="w-3 h-3 inline text-red-400 mr-1" />
-          부부동산 - 똑똑한 자산 관리
+          오늘도 사랑으로
         </p>
       </motion.div>
     </div>
