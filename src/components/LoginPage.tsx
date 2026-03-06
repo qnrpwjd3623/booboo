@@ -48,8 +48,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-orange-400 to-pink-500 rounded-3xl shadow-lg mb-4">
             <Heart className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">부부동산</h1>
-          <p className="text-sm text-gray-500 mt-1">함께 만드는 자산 관리</p>
+          <h1 className="text-2xl font-bold text-gray-900">부부동산집</h1>
+          <p className="text-sm text-gray-500 mt-1">태형과 샐리 둘만 쓰는 가계부</p>
         </motion.div>
 
         {/* Login Form */}
