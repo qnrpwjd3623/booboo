@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   category TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
   amount BIGINT NOT NULL DEFAULT 0,
+  owner TEXT NOT NULL DEFAULT 'shared',
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS stocks (
   avg_price BIGINT NOT NULL DEFAULT 0,
   current_price BIGINT NOT NULL DEFAULT 0,
   memo TEXT DEFAULT '',
+  owner TEXT NOT NULL DEFAULT 'shared',
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -55,6 +57,7 @@ CREATE TABLE IF NOT EXISTS financial_products (
   memo TEXT DEFAULT '',
   start_date TEXT,
   maturity_date TEXT,
+  owner TEXT NOT NULL DEFAULT 'shared',
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );

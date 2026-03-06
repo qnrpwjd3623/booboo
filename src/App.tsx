@@ -15,9 +15,9 @@ import { CoupleProfileSettings, type CoupleProfile } from '@/components/CouplePr
 import { useSupabaseFinanceData } from '@/hooks/useSupabaseFinanceData';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { fetchMultipleStockPrices, startStockPriceAutoUpdate } from '@/services/stockApi';
-import { getFinancialAdvice, type FinancialContext } from '@/services/geminiApi';
+import { getFinancialAdvice, getMonthlyChallenge, type FinancialContext } from '@/services/aiApi';
 import { Heart, Sparkles, Wallet, TrendingUp, PiggyBank, Menu, X, Settings, Target, Loader2 } from 'lucide-react';
-import type { Transaction, StockItem, FinancialProduct, BotMessage } from '@/types';
+import type { Transaction, StockItem, FinancialProduct, BotMessage, Challenge } from '@/types';
 
 // Generate yearly data from stored data
 function generateYearlyData(
@@ -95,14 +95,7 @@ function generateYearlyData(
     stocks,
     financialProducts: products,
     streak,
-    challenge: {
-      id: '1',
-      title: '외식비 30% 줄이기',
-      description: '이번 달 외식비를 지난달보다 30% 줄여보세요!',
-      targetReduction: 30,
-      currentReduction: 18,
-      category: '외식',
-    },
+    challenge: null,
   };
 }
 
@@ -121,6 +114,7 @@ function App() {
   const [profile, setProfile] = useLocalStorage<CoupleProfile>('couple-profile', defaultProfile);
   const [stockPrices, setStockPrices] = useState<Record<string, { currentPrice: number }>>({});
   const [botMessage, setBotMessage] = useState<BotMessage | null>(null);
+  const [monthlyChallenge, setMonthlyChallenge] = useState<Challenge | null>(null);
 
   const [isTransactionFormOpen, setIsTransactionFormOpen] = useState(false);
   const [isStockFormOpen, setIsStockFormOpen] = useState(false);
@@ -205,19 +199,19 @@ function App() {
     });
   }, [stockPrices]);
 
-  // Gemini 조언 업데이트
+  // AI 조언 & 챌린지 업데이트
   useEffect(() => {
     const stockTotal = stocks.reduce((sum, s) => sum + (s.shares * s.currentPrice), 0);
     const stockCost = stocks.reduce((sum, s) => sum + (s.shares * s.avgPrice), 0);
     const stockReturn = stockCost > 0 ? ((stockTotal - stockCost) / stockCost) * 100 : 0;
 
-    const monthlyIncome = yearlyData.monthlyData.reduce((sum, m) => sum + m.income, 0) / 12;
-    const monthlyExpense = yearlyData.monthlyData.reduce((sum, m) => sum + m.expense, 0) / 12;
+    const monthlyIncome = yearlyData.monthlyData.reduce((sum, m) => sum + m.income, 0) / 12 || 0;
+    const monthlyExpense = yearlyData.monthlyData.reduce((sum, m) => sum + m.expense, 0) / 12 || 0;
 
     const context: FinancialContext = {
       currentNetWorth: yearlyData.currentNetWorth,
       targetNetWorth: yearlyData.targetNetWorth,
-      progress: (yearlyData.currentAmount / yearlyData.targetAmount) * 100,
+      progress: (yearlyData.currentAmount / yearlyData.targetAmount) * 100 || 0,
       streak: yearlyData.streak,
       monthsLeft,
       averageSavingsRate: yearlyData.averageSavingsRate,
@@ -230,11 +224,17 @@ function App() {
 
     getFinancialAdvice(context).then((advice) => {
       setBotMessage({
-        id: 'gemini-' + Date.now(),
+        id: 'ai-' + Date.now(),
         type: advice.type,
         message: advice.message,
         emoji: advice.emoji,
       });
+    });
+
+    getMonthlyChallenge(context).then((challengeData) => {
+      if (challengeData) {
+        setMonthlyChallenge(challengeData);
+      }
     });
   }, [yearlyData, stocks, profile, monthsLeft]);
 
@@ -476,7 +476,7 @@ function App() {
               currentAmount={yearlyData.currentAmount}
               targetAmount={yearlyData.targetAmount}
               streak={yearlyData.streak}
-              challenge={yearlyData.challenge}
+              challenge={monthlyChallenge}
               monthsLeft={monthsLeft}
             />
           </div>
@@ -541,6 +541,7 @@ function App() {
         onAdd={handleAddTransaction}
         onClose={() => setIsTransactionFormOpen(false)}
         isOpen={isTransactionFormOpen}
+        partnerNames={[profile.partner1.name, profile.partner2.name]}
       />
 
       <StockForm
@@ -552,6 +553,7 @@ function App() {
         }}
         isOpen={isStockFormOpen}
         editStock={editingStock}
+        partnerNames={[profile.partner1.name, profile.partner2.name]}
       />
 
       <FinancialProductForm
@@ -563,6 +565,7 @@ function App() {
         }}
         isOpen={isProductFormOpen}
         editProduct={editingProduct}
+        partnerNames={[profile.partner1.name, profile.partner2.name]}
       />
 
       <GoalSettingForm

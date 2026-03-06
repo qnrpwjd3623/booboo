@@ -9,16 +9,16 @@ interface GoalProgressProps {
   currentAmount: number;
   targetAmount: number;
   streak: number;
-  challenge: Challenge;
+  challenge: Challenge | null;
   monthsLeft: number;
 }
 
-export function GoalProgress({ 
-  currentAmount, 
-  targetAmount, 
-  streak, 
+export function GoalProgress({
+  currentAmount,
+  targetAmount,
+  streak,
   challenge,
-  monthsLeft 
+  monthsLeft
 }: GoalProgressProps) {
   const [ref, isInView] = useInView<HTMLDivElement>({ threshold: 0.2 });
   const percentage = Math.min((currentAmount / targetAmount) * 100, 100);
@@ -39,9 +39,9 @@ export function GoalProgress({
 
       {/* Circular Progress */}
       <div className="flex justify-center mb-6">
-        <CircularProgress 
-          percentage={percentage} 
-          size={180} 
+        <CircularProgress
+          percentage={percentage}
+          size={180}
           strokeWidth={14}
           color="#007AFF"
           delay={300}
@@ -51,7 +51,7 @@ export function GoalProgress({
       {/* Remaining Amount */}
       <div className="text-center mb-6">
         <p className="text-sm text-gray-500 mb-1">남은 금액</p>
-        <motion.p 
+        <motion.p
           className="text-2xl font-bold text-gray-900"
           initial={{ opacity: 0 }}
           animate={isInView ? { opacity: 1 } : {}}
@@ -59,7 +59,7 @@ export function GoalProgress({
         >
           {formatCurrency(remainingAmount)}
         </motion.p>
-        <motion.p 
+        <motion.p
           className="text-xs text-orange-500 mt-1 font-medium"
           initial={{ opacity: 0 }}
           animate={isInView ? { opacity: 1 } : {}}
@@ -70,7 +70,7 @@ export function GoalProgress({
       </div>
 
       {/* Streak */}
-      <motion.div 
+      <motion.div
         className="bg-gradient-to-r from-orange-50 to-red-50 rounded-2xl p-4 mb-4"
         initial={{ opacity: 0, x: -20 }}
         animate={isInView ? { opacity: 1, x: 0 } : {}}
@@ -87,7 +87,7 @@ export function GoalProgress({
             </div>
           </div>
           <div className="text-right">
-            <motion.span 
+            <motion.span
               className="text-2xl font-bold text-orange-500"
               initial={{ scale: 0 }}
               animate={isInView ? { scale: 1 } : {}}
@@ -101,34 +101,36 @@ export function GoalProgress({
       </motion.div>
 
       {/* Challenge */}
-      <motion.div 
-        className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-4"
-        initial={{ opacity: 0, x: -20 }}
-        animate={isInView ? { opacity: 1, x: 0 } : {}}
-        transition={{ delay: 0.8 }}
-      >
-        <div className="flex items-center gap-2 mb-3">
-          <TrendingDown className="w-4 h-4 text-blue-500" />
-          <p className="text-sm font-medium text-gray-900">이번 달 챌린지</p>
-        </div>
-        <p className="text-sm text-gray-600 mb-3">{challenge.title}</p>
-        
-        {/* Challenge Progress */}
-        <div className="relative">
-          <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-            <motion.div
-              className="h-full bg-gradient-to-r from-blue-400 to-purple-500 rounded-full"
-              initial={{ width: 0 }}
-              animate={isInView ? { width: `${(challenge.currentReduction / challenge.targetReduction) * 100}%` } : {}}
-              transition={{ duration: 1, delay: 1 }}
-            />
+      {challenge && (
+        <motion.div
+          className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-4"
+          initial={{ opacity: 0, x: -20 }}
+          animate={isInView ? { opacity: 1, x: 0 } : {}}
+          transition={{ delay: 0.8 }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <TrendingDown className="w-4 h-4 text-blue-500" />
+            <p className="text-sm font-medium text-gray-900">이번 달 챌린지</p>
           </div>
-          <div className="flex justify-between mt-2">
-            <span className="text-xs text-gray-500">현재 {challenge.currentReduction}%</span>
-            <span className="text-xs text-gray-500">목표 {challenge.targetReduction}%</span>
+          <p className="text-sm text-gray-600 mb-3">{challenge.title}</p>
+
+          {/* Challenge Progress */}
+          <div className="relative">
+            <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+              <motion.div
+                className="h-full bg-gradient-to-r from-blue-400 to-purple-500 rounded-full"
+                initial={{ width: 0 }}
+                animate={isInView ? { width: `${(challenge.currentReduction / challenge.targetReduction) * 100}%` } : {}}
+                transition={{ duration: 1, delay: 1 }}
+              />
+            </div>
+            <div className="flex justify-between mt-2">
+              <span className="text-xs text-gray-500">현재 {challenge.currentReduction}%</span>
+              <span className="text-xs text-gray-500">목표 {challenge.targetReduction}%</span>
+            </div>
           </div>
-        </div>
-      </motion.div>
+        </motion.div>
+      )}
     </motion.div>
   );
 }

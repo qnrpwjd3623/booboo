@@ -10,15 +10,17 @@ interface StockFormProps {
   onClose: () => void;
   isOpen: boolean;
   editStock?: StockItem | null;
+  partnerNames: [string, string];
 }
 
-export function StockForm({ onAdd, onUpdate, onClose, isOpen, editStock }: StockFormProps) {
+export function StockForm({ onAdd, onUpdate, onClose, isOpen, editStock, partnerNames }: StockFormProps) {
   const [name, setName] = useState('');
   const [ticker, setTicker] = useState('');
   const [shares, setShares] = useState('');
   const [avgPrice, setAvgPrice] = useState('');
   const [currentPrice, setCurrentPrice] = useState('');
   const [memo, setMemo] = useState('');
+  const [owner, setOwner] = useState('shared');
 
   const isEditing = !!editStock;
 
@@ -30,6 +32,7 @@ export function StockForm({ onAdd, onUpdate, onClose, isOpen, editStock }: Stock
       setAvgPrice(editStock.avgPrice.toString());
       setCurrentPrice(editStock.currentPrice.toString());
       setMemo(editStock.memo || '');
+      setOwner(editStock.owner || 'shared');
     } else {
       setName('');
       setTicker('');
@@ -37,6 +40,7 @@ export function StockForm({ onAdd, onUpdate, onClose, isOpen, editStock }: Stock
       setAvgPrice('');
       setCurrentPrice('');
       setMemo('');
+      setOwner('shared');
     }
   }, [editStock, isOpen]);
 
@@ -51,6 +55,7 @@ export function StockForm({ onAdd, onUpdate, onClose, isOpen, editStock }: Stock
       avgPrice: Number(avgPrice.replace(/,/g, '')),
       currentPrice: Number(currentPrice.replace(/,/g, '')),
       memo,
+      owner,
     };
 
     if (isEditing && editStock && onUpdate) {
@@ -75,6 +80,26 @@ export function StockForm({ onAdd, onUpdate, onClose, isOpen, editStock }: Stock
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? '주식 수정' : '주식 추가'} maxWidth="max-w-md">
       <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        {/* Owner Selector */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">소유자</label>
+          <div className="flex gap-2">
+            {['shared', partnerNames[0], partnerNames[1]].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setOwner(n)}
+                className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${owner === n
+                    ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-500/30'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+              >
+                {n === 'shared' ? '공동' : n}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Stock Name & Ticker */}
         <div className="grid grid-cols-2 gap-4">
           <div>

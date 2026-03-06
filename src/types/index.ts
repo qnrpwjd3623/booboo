@@ -23,6 +23,7 @@ export interface Transaction {
   category: string;
   description: string;
   amount: number;
+  owner: string; // 파트너 이름 or 'shared'
 }
 
 // 주식 포트폴리오
@@ -34,6 +35,7 @@ export interface StockItem {
   avgPrice: number;
   currentPrice: number;
   memo?: string;
+  owner: string; // 파트너 이름 or 'shared'
 }
 
 // 금융상품 (IRP, ISA, 연금저축, 펀드 등)
@@ -48,6 +50,7 @@ export interface FinancialProduct {
   memo?: string;
   startDate?: string;
   maturityDate?: string;
+  owner: string; // 파트너 이름 or 'shared'
 }
 
 // 월별 데이터
@@ -89,7 +92,7 @@ export interface YearlyData {
   stocks: StockItem[];
   financialProducts: FinancialProduct[];
   streak: number;
-  challenge: Challenge;
+  challenge: Challenge | null;
 }
 
 // 부부동산봇 메시지

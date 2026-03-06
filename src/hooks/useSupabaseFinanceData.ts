@@ -12,6 +12,7 @@ interface DbTransaction {
     category: string;
     description: string;
     amount: number;
+    owner: string;
 }
 
 interface DbStock {
@@ -22,6 +23,7 @@ interface DbStock {
     avg_price: number;
     current_price: number;
     memo: string;
+    owner: string;
 }
 
 interface DbProduct {
@@ -35,6 +37,7 @@ interface DbProduct {
     memo: string;
     start_date: string | null;
     maturity_date: string | null;
+    owner: string;
 }
 
 interface DbYearlySetting {
@@ -55,6 +58,7 @@ function toAppTransaction(db: DbTransaction): Transaction {
         category: db.category,
         description: db.description,
         amount: db.amount,
+        owner: db.owner || 'shared',
     };
 }
 
@@ -67,6 +71,7 @@ function toAppStock(db: DbStock): StockItem {
         avgPrice: db.avg_price,
         currentPrice: db.current_price,
         memo: db.memo,
+        owner: db.owner || 'shared',
     };
 }
 
@@ -82,6 +87,7 @@ function toAppProduct(db: DbProduct): FinancialProduct {
         memo: db.memo,
         startDate: db.start_date || undefined,
         maturityDate: db.maturity_date || undefined,
+        owner: db.owner || 'shared',
     };
 }
 
@@ -161,6 +167,7 @@ export function useSupabaseFinanceData() {
                 category: transaction.category,
                 description: transaction.description,
                 amount: transaction.amount,
+                owner: transaction.owner || 'shared',
             })
             .select()
             .single();
@@ -182,6 +189,7 @@ export function useSupabaseFinanceData() {
         if (updates.category !== undefined) dbUpdates.category = updates.category;
         if (updates.description !== undefined) dbUpdates.description = updates.description;
         if (updates.amount !== undefined) dbUpdates.amount = updates.amount;
+        if (updates.owner !== undefined) dbUpdates.owner = updates.owner;
 
         const { error } = await supabase.from('transactions').update(dbUpdates).eq('id', id);
         if (error) { console.error('Update transaction error:', error); return; }
@@ -216,6 +224,7 @@ export function useSupabaseFinanceData() {
                 avg_price: stock.avgPrice,
                 current_price: stock.currentPrice,
                 memo: stock.memo || '',
+                owner: stock.owner || 'shared',
             })
             .select()
             .single();
@@ -236,6 +245,7 @@ export function useSupabaseFinanceData() {
         if (updates.avgPrice !== undefined) dbUpdates.avg_price = updates.avgPrice;
         if (updates.currentPrice !== undefined) dbUpdates.current_price = updates.currentPrice;
         if (updates.memo !== undefined) dbUpdates.memo = updates.memo;
+        if (updates.owner !== undefined) dbUpdates.owner = updates.owner;
 
         const { error } = await supabase.from('stocks').update(dbUpdates).eq('id', id);
         if (error) { console.error('Update stock error:', error); return; }
@@ -275,6 +285,7 @@ export function useSupabaseFinanceData() {
                 memo: product.memo || '',
                 start_date: product.startDate || null,
                 maturity_date: product.maturityDate || null,
+                owner: product.owner || 'shared',
             })
             .select()
             .single();
@@ -298,6 +309,7 @@ export function useSupabaseFinanceData() {
         if (updates.memo !== undefined) dbUpdates.memo = updates.memo;
         if (updates.startDate !== undefined) dbUpdates.start_date = updates.startDate;
         if (updates.maturityDate !== undefined) dbUpdates.maturity_date = updates.maturityDate;
+        if (updates.owner !== undefined) dbUpdates.owner = updates.owner;
 
         const { error } = await supabase.from('financial_products').update(dbUpdates).eq('id', id);
         if (error) { console.error('Update product error:', error); return; }

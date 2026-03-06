@@ -10,6 +10,7 @@ interface FinancialProductFormProps {
   onClose: () => void;
   isOpen: boolean;
   editProduct?: FinancialProduct | null;
+  partnerNames: [string, string];
 }
 
 const productTypes = [
@@ -21,7 +22,7 @@ const productTypes = [
   { id: 'savings', name: '적금', icon: PiggyBank, color: 'bg-pink-100 text-pink-600' },
 ] as const;
 
-export function FinancialProductForm({ onAdd, onUpdate, onClose, isOpen, editProduct }: FinancialProductFormProps) {
+export function FinancialProductForm({ onAdd, onUpdate, onClose, isOpen, editProduct, partnerNames }: FinancialProductFormProps) {
   const [type, setType] = useState<FinancialProduct['type']>('irp');
   const [name, setName] = useState('');
   const [company, setCompany] = useState('');
@@ -30,6 +31,7 @@ export function FinancialProductForm({ onAdd, onUpdate, onClose, isOpen, editPro
   const [memo, setMemo] = useState('');
   const [startDate, setStartDate] = useState('');
   const [maturityDate, setMaturityDate] = useState('');
+  const [owner, setOwner] = useState('shared');
 
   const isEditing = !!editProduct;
 
@@ -43,6 +45,7 @@ export function FinancialProductForm({ onAdd, onUpdate, onClose, isOpen, editPro
       setMemo(editProduct.memo || '');
       setStartDate(editProduct.startDate || '');
       setMaturityDate(editProduct.maturityDate || '');
+      setOwner(editProduct.owner || 'shared');
     } else {
       setType('irp');
       setName('');
@@ -52,6 +55,7 @@ export function FinancialProductForm({ onAdd, onUpdate, onClose, isOpen, editPro
       setMemo('');
       setStartDate('');
       setMaturityDate('');
+      setOwner('shared');
     }
   }, [editProduct, isOpen]);
 
@@ -73,6 +77,7 @@ export function FinancialProductForm({ onAdd, onUpdate, onClose, isOpen, editPro
       memo,
       startDate: startDate || undefined,
       maturityDate: maturityDate || undefined,
+      owner,
     };
 
     if (isEditing && editProduct && onUpdate) {
@@ -97,6 +102,26 @@ export function FinancialProductForm({ onAdd, onUpdate, onClose, isOpen, editPro
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? '상품 수정' : '상품 추가'} maxWidth="max-w-md">
       <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        {/* Owner Selector */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">소유자</label>
+          <div className="flex gap-2">
+            {['shared', partnerNames[0], partnerNames[1]].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setOwner(n)}
+                className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${owner === n
+                    ? 'bg-purple-100 text-purple-700 ring-2 ring-purple-500/30'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+              >
+                {n === 'shared' ? '공동' : n}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Product Type */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">상품 유형</label>
@@ -106,11 +131,10 @@ export function FinancialProductForm({ onAdd, onUpdate, onClose, isOpen, editPro
                 key={t.id}
                 type="button"
                 onClick={() => setType(t.id)}
-                className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-all ${
-                  type === t.id
+                className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-all ${type === t.id
                     ? 'bg-gray-900 text-white ring-2 ring-gray-900 ring-offset-2'
                     : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-                }`}
+                  }`}
               >
                 <t.icon className="w-5 h-5" />
                 <span className="text-xs font-medium">{t.name}</span>

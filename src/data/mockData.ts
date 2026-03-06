@@ -25,21 +25,14 @@ export const yearlyData2025: YearlyData = {
     { month: 12, monthName: '12월', netWorth: 0, income: 0, expense: 0, savingsRate: 0, targetSavingsRate: 40, targetAchieved: false, stockValue: 0, cashValue: 0, pensionValue: 0, debtValue: 0 },
   ],
   stocks: [
-    { id: '1', name: '삼성전자', ticker: '005930', shares: 100, avgPrice: 65000, currentPrice: 78500 },
-    { id: '2', name: 'NAVER', ticker: '035420', shares: 50, avgPrice: 320000, currentPrice: 298000 },
-    { id: '3', name: '카카오', ticker: '035720', shares: 200, avgPrice: 85000, currentPrice: 92000 },
-    { id: '4', name: '현대차', ticker: '005380', shares: 80, avgPrice: 180000, currentPrice: 215000 },
-    { id: '5', name: 'LG에너지솔루션', ticker: '373220', shares: 30, avgPrice: 450000, currentPrice: 398000 },
+    { id: '1', name: '삼성전자', ticker: '005930', shares: 100, avgPrice: 65000, currentPrice: 78500, owner: 'shared' },
+    { id: '2', name: 'NAVER', ticker: '035420', shares: 50, avgPrice: 320000, currentPrice: 298000, owner: 'shared' },
+    { id: '3', name: '카카오', ticker: '035720', shares: 200, avgPrice: 85000, currentPrice: 92000, owner: 'shared' },
+    { id: '4', name: '현대차', ticker: '005380', shares: 80, avgPrice: 180000, currentPrice: 215000, owner: 'shared' },
+    { id: '5', name: 'LG에너지솔루션', ticker: '373220', shares: 30, avgPrice: 450000, currentPrice: 398000, owner: 'shared' },
   ],
   financialProducts: [],
-  challenge: {
-    id: '1',
-    title: '외식비 30% 줄이기',
-    description: '이번 달 외식비를 지난달보다 30% 줄여보세요!',
-    targetReduction: 30,
-    currentReduction: 18,
-    category: '외식'
-  }
+  challenge: null,
 };
 
 // 2024년 목업 데이터
@@ -67,19 +60,12 @@ export const yearlyData2024: YearlyData = {
     { month: 12, monthName: '12월', netWorth: 125000000, income: 8500000, expense: 4500000, savingsRate: 47.1, targetSavingsRate: 40, targetAchieved: true, stockValue: 45000000, cashValue: 27000000, pensionValue: 43000000, debtValue: 3000000 },
   ],
   stocks: [
-    { id: '1', name: '삼성전자', ticker: '005930', shares: 80, avgPrice: 62000, currentPrice: 65000 },
-    { id: '2', name: 'NAVER', ticker: '035420', shares: 40, avgPrice: 310000, currentPrice: 320000 },
-    { id: '3', name: '카카오', ticker: '035720', shares: 150, avgPrice: 82000, currentPrice: 85000 },
-    { id: '4', name: '현대차', ticker: '005380', shares: 60, avgPrice: 175000, currentPrice: 180000 },
+    { id: '1', name: '삼성전자', ticker: '005930', shares: 80, avgPrice: 62000, currentPrice: 65000, owner: 'shared' },
+    { id: '2', name: 'NAVER', ticker: '035420', shares: 40, avgPrice: 310000, currentPrice: 320000, owner: 'shared' },
+    { id: '3', name: '카카오', ticker: '035720', shares: 150, avgPrice: 82000, currentPrice: 85000, owner: 'shared' },
+    { id: '4', name: '현대차', ticker: '005380', shares: 60, avgPrice: 175000, currentPrice: 180000, owner: 'shared' },
   ],
-  challenge: {
-    id: '1',
-    title: '쇼핑비 25% 줄이기',
-    description: '이번 달 쇼핑비를 지난달보다 25% 줄여보세요!',
-    targetReduction: 25,
-    currentReduction: 25,
-    category: '쇼핑'
-  },
+  challenge: null,
   financialProducts: []
 };
 
