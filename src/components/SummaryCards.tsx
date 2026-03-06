@@ -1,7 +1,7 @@
 import { useCountUp } from '@/hooks/useCountUp';
 import { useInView } from '@/hooks/useInView';
 import { TrendingUp, TrendingDown, Minus, Wallet, Target, PiggyBank } from 'lucide-react';
-import { formatCurrency, calculateGrowthRate } from '@/data/mockData';
+import { formatCurrency, calculateGrowthRate } from '@/utils/format';
 
 interface SummaryCardsProps {
   currentNetWorth: number;

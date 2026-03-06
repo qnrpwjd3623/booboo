@@ -12,11 +12,13 @@ import { StockForm } from '@/components/StockForm';
 import { FinancialProductForm } from '@/components/FinancialProductForm';
 import { GoalSettingForm } from '@/components/GoalSettingForm';
 import { CoupleProfileSettings, type CoupleProfile } from '@/components/CoupleProfile';
+import { LoginPage } from '@/components/LoginPage';
 import { useSupabaseFinanceData } from '@/hooks/useSupabaseFinanceData';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useAuth } from '@/hooks/useAuth';
 import { fetchMultipleStockPrices, startStockPriceAutoUpdate } from '@/services/stockApi';
 import { getFinancialAdvice, getMonthlyChallenge, type FinancialContext } from '@/services/aiApi';
-import { Heart, Sparkles, Wallet, TrendingUp, PiggyBank, Menu, X, Settings, Target, Loader2 } from 'lucide-react';
+import { Heart, Sparkles, Wallet, TrendingUp, PiggyBank, Menu, X, Settings, Target, Loader2, LogOut } from 'lucide-react';
 import type { Transaction, StockItem, FinancialProduct, BotMessage, Challenge } from '@/types';
 
 // Generate yearly data from stored data
@@ -106,6 +108,8 @@ const defaultProfile: CoupleProfile = {
 };
 
 function App() {
+  const { user, isLoading: authLoading, signIn, signOut } = useAuth();
+
   const [selectedYear, setSelectedYear] = useState(2025);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -199,19 +203,34 @@ function App() {
     });
   }, [stockPrices]);
 
-  // AI 조언 & 챌린지 업데이트
+  // AI 조언 & 챌린지 업데이트 (이전달 실제 데이터 활용)
   useEffect(() => {
     const stockTotal = stocks.reduce((sum, s) => sum + (s.shares * s.currentPrice), 0);
     const stockCost = stocks.reduce((sum, s) => sum + (s.shares * s.avgPrice), 0);
     const stockReturn = stockCost > 0 ? ((stockTotal - stockCost) / stockCost) * 100 : 0;
 
-    const monthlyIncome = yearlyData.monthlyData.reduce((sum, m) => sum + m.income, 0) / 12 || 0;
-    const monthlyExpense = yearlyData.monthlyData.reduce((sum, m) => sum + m.expense, 0) / 12 || 0;
+    const validMonths = yearlyData.monthlyData.filter(m => m.income > 0);
+    const monthlyIncome = validMonths.length > 0 ? validMonths.reduce((sum, m) => sum + m.income, 0) / validMonths.length : 0;
+    const monthlyExpense = validMonths.length > 0 ? validMonths.reduce((sum, m) => sum + m.expense, 0) / validMonths.length : 0;
+
+    // 이전달 데이터 추출 (현재 달 기준 -1)
+    const prevMonthIndex = currentMonth - 2; // 0-indexed
+    const prevMonthData = prevMonthIndex >= 0 ? yearlyData.monthlyData[prevMonthIndex] : null;
+
+    // 이전달 카테고리별 지출 집계
+    const prevMonthTransactions = prevMonthData && prevMonthData.income > 0
+      ? transactions.filter(t => t.year === selectedYear && t.month === currentMonth - 1 && t.type === 'expense')
+      : [];
+
+    const expenseByCategory = prevMonthTransactions.reduce<Record<string, number>>((acc, t) => {
+      acc[t.category] = (acc[t.category] || 0) + t.amount;
+      return acc;
+    }, {});
 
     const context: FinancialContext = {
       currentNetWorth: yearlyData.currentNetWorth,
       targetNetWorth: yearlyData.targetNetWorth,
-      progress: (yearlyData.currentAmount / yearlyData.targetAmount) * 100 || 0,
+      progress: yearlyData.targetAmount > 0 ? (yearlyData.currentAmount / yearlyData.targetAmount) * 100 : 0,
       streak: yearlyData.streak,
       monthsLeft,
       averageSavingsRate: yearlyData.averageSavingsRate,
@@ -220,6 +239,12 @@ function App() {
       stockReturn,
       totalInvestment: stockCost,
       coupleNames: [profile.partner1.name, profile.partner2.name],
+      previousMonthData: prevMonthData && prevMonthData.income > 0 ? {
+        income: prevMonthData.income,
+        expense: prevMonthData.expense,
+        savingsRate: prevMonthData.savingsRate,
+        expenseByCategory: Object.entries(expenseByCategory).map(([category, amount]) => ({ category, amount })),
+      } : undefined,
     };
 
     getFinancialAdvice(context).then((advice) => {
@@ -236,7 +261,7 @@ function App() {
         setMonthlyChallenge(challengeData);
       }
     });
-  }, [yearlyData, stocks, profile, monthsLeft]);
+  }, [yearlyData, stocks, transactions, profile, monthsLeft, selectedYear, currentMonth]);
 
   const handleAddTransaction = useCallback((transaction: Omit<Transaction, 'id'>) => {
     addTransaction(transaction);
@@ -285,6 +310,23 @@ function App() {
     setEditingProduct(product);
     setIsProductFormOpen(true);
   };
+
+  // 인증 로딩 중
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
+          <p className="text-gray-500 font-medium">인증 확인 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 로그인하지 않은 경우 로그인 페이지 표시
+  if (!user) {
+    return <LoginPage onLogin={signIn} />;
+  }
 
   if (isLoading) {
     return (
@@ -353,6 +395,13 @@ function App() {
                 selectedYear={selectedYear}
                 onYearChange={setSelectedYear}
               />
+              <button
+                onClick={signOut}
+                title="로그아웃"
+                className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-500 hover:text-red-500"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
 
             {/* Mobile Menu Button */}

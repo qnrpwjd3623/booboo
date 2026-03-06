@@ -12,7 +12,7 @@ import {
 } from 'recharts';
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import type { MonthlyData } from '@/types';
-import { formatCurrency, calculateGrowthRate } from '@/data/mockData';
+import { formatCurrency, calculateGrowthRate } from '@/utils/format';
 import { useInView } from '@/hooks/useInView';
 
 interface NetWorthChartProps {

@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { CircularProgress } from './CircularProgress';
 import { Flame, Target, TrendingDown } from 'lucide-react';
-import { formatCurrency } from '@/data/mockData';
+import { formatCurrency } from '@/utils/format';
 import type { Challenge } from '@/types';
 import { useInView } from '@/hooks/useInView';
 

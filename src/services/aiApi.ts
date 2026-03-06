@@ -1,15 +1,17 @@
-// Claude API 연동 서비스
+// Gemini API 연동 서비스
 // 부부동산봇이 DB 데이터에 접근하는 방식:
-// 프론트엔드에서 데이터를 조회 → FinancialContext로 정리 → Claude API prompt에 전달
-// Claude는 DB에 직접 접근하지 않고, 프론트에서 전달한 context를 기반으로 조언 생성
-
-import Anthropic from '@anthropic-ai/sdk';
+// 프론트엔드에서 데이터를 조회 → FinancialContext로 정리 → Gemini API prompt에 전달
 
 export interface FinancialAdvice {
   message: string;
   type: 'praise' | 'warning' | 'tip' | 'celebration';
   emoji: string;
   actions?: string[];
+}
+
+export interface MonthlyExpenseDetail {
+  category: string;
+  amount: number;
 }
 
 export interface FinancialContext {
@@ -24,44 +26,63 @@ export interface FinancialContext {
   stockReturn: number;
   totalInvestment: number;
   coupleNames: string[];
+  // 이전달 상세 데이터 (챌린지용)
+  previousMonthData?: {
+    income: number;
+    expense: number;
+    savingsRate: number;
+    expenseByCategory?: MonthlyExpenseDetail[];
+  };
 }
 
-// Claude API 키 (환경 변수에서 가져오기)
-const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY || '';
+// Gemini API 키
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
-const anthropic = new Anthropic({
-  apiKey: ANTHROPIC_API_KEY,
-  dangerouslyAllowBrowser: true, // 프론트엔드 직접 호출 허용
-});
+async function callGeminiAPI(prompt: string, systemInstruction?: string): Promise<string> {
+  const body: Record<string, unknown> = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 1024,
+      responseMimeType: 'application/json',
+    },
+  };
+  if (systemInstruction) {
+    body.systemInstruction = { parts: [{ text: systemInstruction }] };
+  }
 
-// Gemini API 호출
+  const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini API error: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('Empty response from Gemini');
+  return text;
+}
+
+// 금융 조언 가져오기
 export async function getFinancialAdvice(context: FinancialContext): Promise<FinancialAdvice> {
-  // API 키가 없으면 더미 응답 반환
-  if (!ANTHROPIC_API_KEY) {
-    console.warn('Anthropic API key is not set. Using dummy advice.');
+  if (!GEMINI_API_KEY) {
+    console.warn('Gemini API key is not set. Using dummy advice.');
     return getDummyAdvice(context);
   }
 
   try {
     const prompt = generatePrompt(context);
-
-    const response = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20240620',
-      max_tokens: 1024,
-      system: 'You are a friendly financial advisor bot. Always respond in valid JSON format only, matching the exact requested structure.',
-      messages: [
-        { role: 'user', content: prompt }
-      ],
-    });
-
-    const contentBlock = response.content[0];
-    if (contentBlock.type !== 'text') {
-      throw new Error('Unexpected response format from Claude');
-    }
-
-    return parseAdviceResponse(contentBlock.text, context);
+    const systemInstruction = '당신은 친근한 재무 조언가 봇입니다. 반드시 요청된 JSON 형식으로만 응답하세요.';
+    const responseText = await callGeminiAPI(prompt, systemInstruction);
+    return parseAdviceResponse(responseText, context);
   } catch (error) {
-    console.error('Anthropic API error:', error);
+    console.error('Gemini API error (advice):', error);
     return getDummyAdvice(context);
   }
 }
@@ -203,34 +224,49 @@ function getDefaultMessage(context: FinancialContext): string {
   return `${coupleNames[0]}, ${coupleNames[1]}! ${progress.toFixed(0)}% 달성했네! 힘내자 💪`;
 }
 
-// 챌린지 생성 프롬프트
+// 챌린지 생성 프롬프트 - 이전달 실제 데이터 활용
 function buildChallengePrompt(context: FinancialContext): string {
+  const prevMonth = context.previousMonthData;
+  const prevMonthExpenses = prevMonth?.expenseByCategory
+    ?.sort((a, b) => b.amount - a.amount)
+    .slice(0, 5)
+    .map(e => `  - ${e.category}: ${e.amount.toLocaleString()}원`)
+    .join('\n') || '  (카테고리별 상세 데이터 없음)';
+
   return `
 당신은 신혼부부(${context.coupleNames.join(', ')})의 자산 관리를 돕는 친근하고 똑똑한 금융 AI 비서 '부부동산봇'입니다.
-주어진 금융 데이터를 분석하여, **이번 달에 실천할 수 있는 구체적이고 달성 가능한 재정 챌린지 1개**를 제안해주세요.
+**지난달의 실제 지출 데이터**를 분석하여, **이번 달에 실천할 수 있는 구체적이고 달성 가능한 재정 챌린지 1개**를 제안해주세요.
 
 ## 부부 금융 컨텍스트
 - 현재 순자산: ${context.currentNetWorth.toLocaleString()}원 (목표: ${context.targetNetWorth.toLocaleString()}원)
 - 연간 목표 달성률: ${context.progress.toFixed(1)}% (${context.monthsLeft}개월 남음)
-- 평균 저축률: ${context.averageSavingsRate}%
+- 평균 저축률: ${context.averageSavingsRate.toFixed(1)}%
+
+## 지난달 실제 데이터 (챌린지 기준)
+- 수입: ${prevMonth ? prevMonth.income.toLocaleString() : 0}원
+- 지출: ${prevMonth ? prevMonth.expense.toLocaleString() : 0}원
+- 저축률: ${prevMonth ? prevMonth.savingsRate.toFixed(1) : 0}%
+- 카테고리별 지출 (Top 5):
+${prevMonthExpenses}
+
+## 월 평균 데이터
 - 월 평균 수입: ${context.monthlyIncome.toLocaleString()}원
 - 월 평균 지출: ${context.monthlyExpense.toLocaleString()}원
 
 ## 챌린지 생성 가이드라인
-1. **구체성**: 막연한 목표(예: "돈 아끼기")가 아닌 구체적인 목표(예: "배달음식 월 3회로 줄이기")를 제시하세요.
-2. **달성 가능성**: 현재 상태에서 무리하지 않고 달성할 수 있는 현실적인 목표여야 합니다.
-3. **긍정적이고 응원하는 톤**: 딱딱하지 않고 친근하게 동기부여를 해주세요.
-4. **목표 수치 산출 기준**: 지출 절감 목표인 경우, 평균 지출의 10~20% 수준이 적당합니다.
+1. **지난달 데이터 기반**: 지난달에 가장 많이 지출한 카테고리에서 줄일 수 있는 구체적 챌린지를 제안하세요.
+2. **구체성**: "돈 아끼기" 같은 막연한 목표가 아닌 "외식 월 4회로 줄이기, 예상 절감액 15만원" 처럼 구체적으로 제시하세요.
+3. **달성 가능성**: 현재 지출의 10~20% 감소 수준의 현실적인 목표를 설정하세요.
+4. **긍정적이고 응원하는 톤**: 친근하게 동기부여해 주세요.
 
-응답은 **반드시** 아래 JSON 형식으로만 작성하세요. 다른 설명이나 텍스트를 추가하지 마세요. (마크다운 백틱 없이 순수 JSON만 반환)
-
+응답은 반드시 아래 JSON 형식으로만 작성하세요:
 {
   "id": "${Date.now().toString()}",
-  "title": "챌린지 제목 (짧고 명확하게)",
-  "description": "챌린지에 대한 친근한 설명과 기대 효과",
-  "targetReduction": 10,
+  "title": "챌린지 제목 (짧고 명확하게, 예: 외식비 줄이기 챌린지)",
+  "description": "지난달 데이터 기반으로 친근한 설명과 기대 효과 (구체적 숫자 포함)",
+  "targetReduction": 15,
   "currentReduction": 0,
-  "category": "절약 카테고리 (예: 식비, 쇼핑, 문화생활 등)"
+  "category": "절약 카테고리 (예: 식비, 외식, 쇼핑 등)"
 }
 `;
 }
@@ -240,33 +276,17 @@ export async function getMonthlyChallenge(context: FinancialContext) {
   const prompt = buildChallengePrompt(context);
 
   try {
-    if (!ANTHROPIC_API_KEY) {
-      console.warn('Anthropic API Key is missing. Using mock challenge.');
+    if (!GEMINI_API_KEY) {
+      console.warn('Gemini API Key is missing. Using mock challenge.');
       return getMockChallenge();
     }
 
-    const response = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20240620',
-      max_tokens: 1024,
-      system: 'You are a financial advisor. Respond in JSON format only without any markdown formatting.',
-      messages: [
-        { role: 'user', content: prompt }
-      ],
-    });
-
-    const contentBlock = response.content[0];
-    if (contentBlock.type !== 'text') {
-      throw new Error('Unexpected response format from Claude');
-    }
-
-    // JSON 문자열 파싱 시도
-    const responseText = contentBlock.text;
+    const systemInstruction = '당신은 금융 조언가입니다. 반드시 요청된 JSON 형식으로만 응답하세요.';
+    const responseText = await callGeminiAPI(prompt, systemInstruction);
     const jsonStr = responseText.replace(/```json\n?|\n?```/g, '').trim();
-    const result = JSON.parse(jsonStr);
-
-    return result;
+    return JSON.parse(jsonStr);
   } catch (error) {
-    console.error('Error calling Claude API for challenge:', error);
+    console.error('Error calling Gemini API for challenge:', error);
     return getMockChallenge();
   }
 }

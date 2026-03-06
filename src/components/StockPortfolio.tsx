@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { TrendingUp, TrendingDown, Package, Edit2, Trash2 } from 'lucide-react';
 import type { StockItem } from '@/types';
-import { formatCurrencyWon } from '@/data/mockData';
+import { formatCurrencyWon } from '@/utils/format';
 import { useInView } from '@/hooks/useInView';
 
 interface StockPortfolioProps {
