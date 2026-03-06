@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/services/supabaseClient';
 import type { User } from '@supabase/supabase-js';
 
-const EMAIL_DOMAIN = 'coupleapp.local';
+const EMAIL_DOMAIN = 'gmail.com';
 
 function usernameToEmail(username: string): string {
   return `${username}@${EMAIL_DOMAIN}`;
