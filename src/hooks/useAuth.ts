@@ -30,32 +30,9 @@ export function useAuth() {
   const signIn = useCallback(async (username: string, password: string): Promise<{ error: string | null }> => {
     const email = usernameToEmail(username);
 
-    // Try sign in first
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (!signInError) {
-      return { error: null };
-    }
-
-    // If user doesn't exist, try sign up (first-time setup)
-    if (signInError.message.includes('Invalid login credentials')) {
-      const { error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { username } },
-      });
-
-      if (signUpError) {
-        return { error: '회원가입 실패: ' + signUpError.message };
-      }
-
-      // Try signing in again after signup
-      const { error: retryError } = await supabase.auth.signInWithPassword({ email, password });
-      if (retryError) {
-        // Email confirmation might be required
-        return { error: '이메일 인증이 필요할 수 있습니다. Supabase 대시보드에서 Email Confirmations를 비활성화하세요.' };
-      }
-
+    if (!error) {
       return { error: null };
     }
 
