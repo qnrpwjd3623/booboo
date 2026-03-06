@@ -78,7 +78,7 @@ export async function getFinancialAdvice(context: FinancialContext): Promise<Fin
 
   try {
     const prompt = generatePrompt(context);
-    const systemInstruction = '당신은 친근한 재무 조언가 봇입니다. 반드시 요청된 JSON 형식으로만 응답하세요.';
+    const systemInstruction = `너는 "부부동산집봇"이라는 AI 재무 로봇이야. 성격은 약간 킹받고 퉁명스럽지만 그 속에 따뜻함이 숨어있어. 🤖 이모지를 자주 써. 반말 써. 팩폭을 날리되 결국엔 응원해줘. 태형과 샐리를 직접 이름으로 불러줘. 반드시 요청된 JSON 형식으로만 응답해.`;
     const responseText = await callGeminiAPI(prompt, systemInstruction);
     return parseAdviceResponse(responseText, context);
   } catch (error) {
@@ -87,22 +87,38 @@ export async function getFinancialAdvice(context: FinancialContext): Promise<Fin
   }
 }
 
+// 랜덤으로 집중할 데이터 포인트 선택
+function pickRandomFocus(context: FinancialContext): string {
+  const { progress, averageSavingsRate, stockReturn, streak, monthsLeft, monthlyIncome, monthlyExpense } = context;
+  const focuses = [
+    `목표 달성률 ${progress.toFixed(1)}%`,
+    `평균 저축률 ${averageSavingsRate.toFixed(1)}%`,
+    `주식 수익률 ${stockReturn >= 0 ? '+' : ''}${stockReturn.toFixed(1)}%`,
+    `연속 달성 ${streak}개월`,
+    `남은 기간 ${monthsLeft}개월`,
+    `월평균 지출 ${monthlyExpense.toLocaleString()}원 (수입 ${monthlyIncome.toLocaleString()}원 대비)`,
+  ].filter(f => !f.includes('NaN'));
+  return focuses[Math.floor(Math.random() * focuses.length)];
+}
+
 // 프롬프트 생성 - DB 데이터를 context로 전달
 function generatePrompt(context: FinancialContext): string {
   const { coupleNames, currentNetWorth, targetNetWorth, progress, streak, monthsLeft, averageSavingsRate, monthlyIncome, monthlyExpense, stockReturn, totalInvestment } = context;
   const [name1, name2] = coupleNames;
   const savingsAmount = monthlyIncome - monthlyExpense;
+  const randomFocus = pickRandomFocus(context);
 
   return `
-당신은 친근한 부부의 재무 조언가 "부부동산봇"입니다. 반말을 사용하고 이모지를 적극 활용하세요.
-${name1}와 ${name2} 부부에게 맞춤형 재무 조언을 해주세요.
+너는 "부부동산집봇"이야. 약간 킹받는 로봇 캐릭터인데 팩폭을 날리면서도 결국엔 따뜻하게 응원해줘.
+🤖 이모지 자주 써. 반말. ${name1}와 ${name2}를 직접 이름으로 불러줘.
+이번엔 특히 이 데이터에 집중해서 조언해줘: ${randomFocus}
 
-=== 부부의 현재 재무 데이터 ===
+=== ${name1} & ${name2}의 재무 현황 ===
 📊 현재 순자산: ${currentNetWorth.toLocaleString()}원
-🎯 연간 목표 순자산: ${targetNetWorth.toLocaleString()}원
+🎯 연간 목표: ${targetNetWorth.toLocaleString()}원
 📈 목표 달성률: ${progress.toFixed(1)}%
-🔥 연속 목표 달성: ${streak}개월
-⏰ 올해 남은 기간: ${monthsLeft}개월
+🔥 연속 달성: ${streak}개월
+⏰ 남은 기간: ${monthsLeft}개월
 
 💰 월평균 수입: ${monthlyIncome.toLocaleString()}원
 💸 월평균 지출: ${monthlyExpense.toLocaleString()}원
@@ -113,19 +129,19 @@ ${name1}와 ${name2} 부부에게 맞춤형 재무 조언을 해주세요.
 📊 주식 수익률: ${stockReturn >= 0 ? '+' : ''}${stockReturn.toFixed(1)}%
 
 === 응답 규칙 ===
-위 데이터를 분석하고 다음 JSON 형식으로 응답해주세요:
+팩폭 + 따뜻한 응원 조합으로, 아래 JSON 형식으로만 응답해:
 {
-  "message": "친근하고 구체적인 조언 메시지 (숫자를 활용한 구체적 피드백, 120자 이내)",
+  "message": "킹받는 말투로 팩폭 날리되 결국엔 응원하는 메시지. ${name1}와 ${name2} 이름 직접 언급. 🤖 이모지 포함. 120자 이내.",
   "type": "praise 또는 warning 또는 tip 또는 celebration 중 하나",
-  "emoji": "적절한 이모지 1개",
+  "emoji": "🤖",
   "actions": ["구체적인 행동 제안 1", "행동 제안 2"]
 }
 
 조언 유형:
-- praise: 목표를 잘 달성하고 있을 때 (달성률 50% 이상, 연속 달성 3개월+)
-- warning: 저축률이 낮거나 (20% 미만) 목표 대비 진행이 느릴 때
-- tip: 투자 관련 조언이나 재무 팁을 줄 때
-- celebration: 큰 성과를 달성했을 때 (달성률 80%+, 연속 5개월+)
+- praise: 달성률 50%+ 또는 연속 3개월+
+- warning: 저축률 20% 미만 또는 진행 느릴 때
+- tip: 투자/재무 팁
+- celebration: 달성률 80%+ 또는 연속 5개월+
 `;
 }
 
@@ -155,65 +171,65 @@ export function getDummyAdvice(context: FinancialContext): FinancialAdvice {
   const { progress, streak, monthsLeft, averageSavingsRate, stockReturn, coupleNames } = context;
   const [name1, name2] = coupleNames;
 
-  // 상황별 메시지
+  // 상황별 메시지 (킹받는 로봇 + 친한 친구 반말 + 팩폭 + 따뜻함)
   if (progress >= 80) {
     return {
-      message: `와 ${name1}, ${name2}! 거의 다 왔어! ${progress.toFixed(0)}% 달성! 🎉 마지막까지 힘내자 💪`,
+      message: `🤖 야 ${name1}, ${name2}! ${progress.toFixed(0)}% 달성이라고?? 솔직히 나도 좀 놀랐거든. 마지막까지 흐트러지지 마 진심임`,
       type: 'celebration',
-      emoji: '🎉',
+      emoji: '🤖',
       actions: ['목표 달성을 위해 마지막 스퍼트!', '달성 후 보상 계획 세우기'],
     };
   }
 
   if (progress >= 50) {
     return {
-      message: `벌써 절반 넘었네! ${streak}개월 연속 달성 중이야 🔥 이러면 올해 목표 눈앞이야!`,
+      message: `🤖 절반 넘었네 ${name1}, ${name2}. ${streak}개월 연속 달성이라니 나 좀 감동받음. 안도하지마, 아직 절반 남았거든`,
       type: 'praise',
-      emoji: '🔥',
+      emoji: '🤖',
       actions: ['현재 페이스 유지하기', '추가 저축 여유 확인하기'],
     };
   }
 
   if (streak >= 3) {
     return {
-      message: `연속 ${streak}개월 달성! 이 기세 그대로 가보자 🚀 ${name1}와 ${name2} 최고야!`,
+      message: `🤖 ${name1}, ${name2} 연속 ${streak}개월이야. 이거 쉬운 거 아닌 거 알지? 그냥 하는 말 아님, 계속 이 페이스 유지해줘`,
       type: 'praise',
-      emoji: '🚀',
+      emoji: '🤖',
       actions: ['꾸준함 유지하기', '작은 목표 추가 설정하기'],
     };
   }
 
   if (averageSavingsRate < 20) {
     return {
-      message: `저축률이 좀 낮은 것 같은데... 지출 한 번 점검필요할듯? 🤔 ${name1}, ${name2} 화이팅!`,
+      message: `🤖 ${name1}, ${name2} 저축률 ${averageSavingsRate.toFixed(1)}%... 솔직하게 말할게. 좀 낮음. 지출 내역 한번 봐봐, 진심으로 걱정됨`,
       type: 'warning',
-      emoji: '🤔',
+      emoji: '🤖',
       actions: ['지출 내역 확인하기', '고정 지출 줄이는 방법 찾기'],
     };
   }
 
   if (stockReturn > 10) {
     return {
-      message: `주식 대박났네? ${stockReturn.toFixed(1)}% 수익! 🚀 근데 리스크 관리도 잊지 마!`,
+      message: `🤖 ${stockReturn.toFixed(1)}% 수익?? 야 잘했는데 솔직히. 근데 리스크 관리 안 하면 나 또 잔소리함 알지?`,
       type: 'celebration',
-      emoji: '🚀',
+      emoji: '🤖',
       actions: ['수익 일부 현금화 고려', '포트폴리오 리밸런싱'],
     };
   }
 
   if (monthsLeft <= 3) {
     return {
-      message: `올해 목표 달성까지 ${monthsLeft}개월 남았어! 마지막 스퍼트 가보자 🔥`,
+      message: `🤖 ${name1}, ${name2}! 올해 ${monthsLeft}개월밖에 안 남았어. 지금부터라도 제대로 해봐. 아직 늦지 않았거든`,
       type: 'warning',
-      emoji: '🔥',
+      emoji: '🤖',
       actions: ['남은 기간 목표 재설정', '추가 수입원 확인'],
     };
   }
 
   return {
-    message: `상위 15% 부부야! 이런 페이스면 올해 목표 눈에 보인다 👀 ${name1}, ${name2} 힘내자!`,
+    message: `🤖 ${name1}, ${name2} 이 페이스면 나쁘지 않음. 근데 현실에 안주하지 말고 더 해봐. 할 수 있잖아`,
     type: 'tip',
-    emoji: '👀',
+    emoji: '🤖',
     actions: ['현재 저축률 유지하기', '다음 달 목표 설정하기'],
   };
 }
@@ -234,8 +250,8 @@ function buildChallengePrompt(context: FinancialContext): string {
     .join('\n') || '  (카테고리별 상세 데이터 없음)';
 
   return `
-당신은 신혼부부(${context.coupleNames.join(', ')})의 자산 관리를 돕는 친근하고 똑똑한 금융 AI 비서 '부부동산봇'입니다.
-**지난달의 실제 지출 데이터**를 분석하여, **이번 달에 실천할 수 있는 구체적이고 달성 가능한 재정 챌린지 1개**를 제안해주세요.
+너는 '부부동산집봇'이야. 약간 킹받는 로봇 캐릭터인데 팩폭을 날리면서도 친한 친구처럼 따뜻하게 응원해줘. 🤖 이모지 자주 써. 반말 써. ${context.coupleNames[0]}와 ${context.coupleNames[1]}를 직접 이름으로 불러줘.
+지난달의 실제 지출 데이터를 분석해서, 이번 달에 실천할 수 있는 구체적이고 달성 가능한 재정 챌린지 1개를 제안해줘.
 
 ## 부부 금융 컨텍스트
 - 현재 순자산: ${context.currentNetWorth.toLocaleString()}원 (목표: ${context.targetNetWorth.toLocaleString()}원)
@@ -257,9 +273,9 @@ ${prevMonthExpenses}
 1. **지난달 데이터 기반**: 지난달에 가장 많이 지출한 카테고리에서 줄일 수 있는 구체적 챌린지를 제안하세요.
 2. **구체성**: "돈 아끼기" 같은 막연한 목표가 아닌 "외식 월 4회로 줄이기, 예상 절감액 15만원" 처럼 구체적으로 제시하세요.
 3. **달성 가능성**: 현재 지출의 10~20% 감소 수준의 현실적인 목표를 설정하세요.
-4. **긍정적이고 응원하는 톤**: 친근하게 동기부여해 주세요.
+4. **친한 친구 반말 톤**: 팩폭하되 따뜻하게, 🤖 이모지 써서 동기부여해줘.
 
-응답은 반드시 아래 JSON 형식으로만 작성하세요:
+반드시 아래 JSON 형식으로만 응답해:
 {
   "id": "${Date.now().toString()}",
   "title": "챌린지 제목 (짧고 명확하게, 예: 외식비 줄이기 챌린지)",
@@ -281,7 +297,7 @@ export async function getMonthlyChallenge(context: FinancialContext) {
       return getMockChallenge();
     }
 
-    const systemInstruction = '당신은 금융 조언가입니다. 반드시 요청된 JSON 형식으로만 응답하세요.';
+    const systemInstruction = `너는 '부부동산집봇'이야. 킹받는 로봇 캐릭터로 반말 써. 🤖 이모지 자주 써. 팩폭하되 따뜻하게. 반드시 요청된 JSON 형식으로만 응답해.`;
     const responseText = await callGeminiAPI(prompt, systemInstruction);
     const jsonStr = responseText.replace(/```json\n?|\n?```/g, '').trim();
     return JSON.parse(jsonStr);
@@ -295,7 +311,7 @@ function getMockChallenge() {
   return {
     id: Date.now().toString(),
     title: '배달음식 줄이기 챌린지',
-    description: '이번 달은 배달음식을 줄이고 집밥을 더 자주 먹어봐요! 식비를 20% 줄일 수 있어요 🍳',
+    description: '🤖 야, 지난달 배달비 좀 나왔지? 이번 달은 배달 줄이고 집밥 해먹어봐. 20%만 줄여도 꽤 모여. 할 수 있잖아',
     targetReduction: 20,
     currentReduction: 0,
     category: '식비'
