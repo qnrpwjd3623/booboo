@@ -161,7 +161,7 @@ export function FinancialProductForm({
     const productData: Omit<FinancialProduct, 'id'> = {
       type,
       name,
-      company: group === 'realestate' ? (address || company) : company,
+      company: group === 'realestate' ? (address || company || name) : company,
       principal: finalPrincipal,
       currentValue: finalCurrentValue,
       returnRate: finalReturnRate,

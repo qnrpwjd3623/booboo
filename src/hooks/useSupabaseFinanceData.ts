@@ -370,6 +370,18 @@ export function useSupabaseFinanceData() {
         setTransactions(prev => prev.filter(t => t.id !== id));
     }, []);
 
+    const deleteTransactionsByYear = useCallback(async (year: number) => {
+        const { error } = await supabase
+            .from('transactions')
+            .delete()
+            .eq('year', year);
+        if (error) {
+            console.error('Delete year transactions error:', error);
+            throw new Error(error.message || '연도 데이터 삭제에 실패했습니다.');
+        }
+        setTransactions(prev => prev.filter(t => t.year !== year));
+    }, []);
+
     const getTransactionsByMonth = useCallback((year: number, month: number) => {
         return transactions.filter(t => t.year === year && t.month === month);
     }, [transactions]);
@@ -468,7 +480,10 @@ export function useSupabaseFinanceData() {
             .select()
             .single();
 
-        if (error) { console.error('Add product error:', error); return; }
+        if (error) {
+            console.error('Add product error:', error);
+            throw new Error(error.message || '자산 추가에 실패했습니다.');
+        }
         if (data) {
             const newProduct = toAppProduct(data);
             setFinancialProducts(prev => [...prev, newProduct]);
@@ -559,7 +574,35 @@ export function useSupabaseFinanceData() {
             .select()
             .single();
 
-        if (error) { console.error('Add loan error:', error); return; }
+        if (error) {
+            console.error('Add loan error:', error);
+            if (error.code === 'PGRST116' || error.message?.includes('does not exist')) {
+                throw new Error(
+                    'loans 테이블이 Supabase에 없습니다.\n\n' +
+                    'Supabase 대시보드 → SQL Editor에서 아래 SQL을 실행해주세요:\n\n' +
+                    'CREATE TABLE loans (\n' +
+                    '  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,\n' +
+                    '  name TEXT NOT NULL,\n' +
+                    '  bank TEXT NOT NULL DEFAULT \'\',\n' +
+                    '  loan_type TEXT NOT NULL DEFAULT \'equal_payment\',\n' +
+                    '  principal BIGINT NOT NULL DEFAULT 0,\n' +
+                    '  remaining_principal BIGINT NOT NULL DEFAULT 0,\n' +
+                    '  interest_rate NUMERIC(5,2) NOT NULL DEFAULT 0,\n' +
+                    '  monthly_payment BIGINT NOT NULL DEFAULT 0,\n' +
+                    '  start_date DATE,\n' +
+                    '  end_date DATE,\n' +
+                    '  total_months INTEGER NOT NULL DEFAULT 0,\n' +
+                    '  owner TEXT NOT NULL DEFAULT \'shared\',\n' +
+                    '  memo TEXT,\n' +
+                    '  created_at TIMESTAMPTZ DEFAULT NOW()\n' +
+                    ');\n' +
+                    'ALTER TABLE loans ENABLE ROW LEVEL SECURITY;\n' +
+                    'CREATE POLICY "loans_auth" ON loans\n' +
+                    '  FOR ALL TO authenticated USING (true) WITH CHECK (true);'
+                );
+            }
+            throw new Error(error.message || '대출 추가에 실패했습니다.');
+        }
         if (data) {
             const newLoan = toAppLoan(data);
             setLoans(prev => [...prev, newLoan]);
@@ -710,6 +753,7 @@ export function useSupabaseFinanceData() {
         addTransactions,
         updateTransaction,
         deleteTransaction,
+        deleteTransactionsByYear,
         getTransactionsByMonth,
         getMonthlySummary,
 

@@ -172,6 +172,7 @@ function App() {
     addTransactions,
     updateTransaction,
     deleteTransaction,
+    deleteTransactionsByYear,
     updateStock,
     deleteStock,
     addStock,
@@ -194,6 +195,23 @@ function App() {
   const monthlyTargets = useMemo(() => rawMonthlyTargets, [JSON.stringify(rawMonthlyTargets)]);
 
   const yearlyData = useMemo(() => {
+    // 이전 연도 이월: startNetWorth가 0(미설정)이면 이전 연도 말 현금 잔액을 자동 적용
+    let effectiveStartNetWorth = settings.startNetWorth;
+    if (!effectiveStartNetWorth) {
+      const prevSettings = getYearlySettings(selectedYear - 1);
+      const prevYearTxns = transactions.filter(t => t.year === selectedYear - 1);
+      const prevIncome = prevYearTxns
+        .filter(t => t.type === 'income')
+        .reduce((s, t) => s + t.amount, 0);
+      const prevExpense = prevYearTxns
+        .filter(t => t.type === 'expense')
+        .reduce((s, t) => s + t.amount, 0);
+      const prevCashEnd = prevSettings.startNetWorth + prevIncome - prevExpense;
+      if (prevCashEnd > 0) {
+        effectiveStartNetWorth = prevCashEnd;
+      }
+    }
+
     return generateYearlyData(
       selectedYear,
       transactions,
@@ -201,10 +219,10 @@ function App() {
       financialProducts,
       loans,
       settings.targetNetWorth,
-      settings.startNetWorth,
+      effectiveStartNetWorth,
       monthlyTargets
     );
-  }, [selectedYear, transactions, stocks, financialProducts, loans, settings, monthlyTargets]);
+  }, [selectedYear, transactions, stocks, financialProducts, loans, settings, monthlyTargets, getYearlySettings]);
 
   const currentMonth = new Date().getMonth() + 1;
   const monthsLeft = 12 - currentMonth;
@@ -354,8 +372,13 @@ function App() {
     }
   }, [deleteStock]);
 
-  const handleAddProduct = useCallback((product: Omit<FinancialProduct, 'id'>) => {
-    addFinancialProduct(product);
+  const handleAddProduct = useCallback(async (product: Omit<FinancialProduct, 'id'>) => {
+    try {
+      await addFinancialProduct(product);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '자산 추가에 실패했습니다.';
+      alert(`❌ 자산 추가 실패\n\n${msg}`);
+    }
   }, [addFinancialProduct]);
 
   const handleUpdateProduct = useCallback((id: string, updates: Partial<FinancialProduct>) => {
@@ -369,8 +392,13 @@ function App() {
     }
   }, [deleteFinancialProduct]);
 
-  const handleAddLoan = useCallback((loan: Omit<LoanItem, 'id'>) => {
-    addLoan(loan);
+  const handleAddLoan = useCallback(async (loan: Omit<LoanItem, 'id'>) => {
+    try {
+      await addLoan(loan);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '대출 추가에 실패했습니다.';
+      alert(`❌ 대출 추가 실패\n\n${msg}`);
+    }
   }, [addLoan]);
 
   const handleUpdateLoan = useCallback((id: string, updates: Partial<LoanItem>) => {
@@ -392,6 +420,16 @@ function App() {
   const handleSaveGoal = useCallback((target: number) => {
     updateYearlySettings(selectedYear, { targetNetWorth: target });
   }, [selectedYear, updateYearlySettings]);
+
+  const handleClearYearTransactions = useCallback(async () => {
+    if (!confirm(`⚠️ ${selectedYear}년 거래내역을 모두 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
+    try {
+      await deleteTransactionsByYear(selectedYear);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '삭제에 실패했습니다.';
+      alert(`❌ 삭제 실패\n\n${msg}`);
+    }
+  }, [selectedYear, deleteTransactionsByYear]);
 
   const openStockEdit = (stock: StockItem) => {
     setEditingStock(stock);
@@ -830,6 +868,8 @@ function App() {
         onClose={() => setIsGoalOpen(false)}
         currentTarget={settings.targetNetWorth}
         onSave={handleSaveGoal}
+        selectedYear={selectedYear}
+        onClearYearData={handleClearYearTransactions}
       />
 
       <CoupleProfileSettings
