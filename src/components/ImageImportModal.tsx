@@ -87,26 +87,57 @@ export function ImageImportModal({
     } catch (err) {
       console.error('Image analysis error:', err);
       const msg = err instanceof Error ? err.message : String(err);
-      setError(`분석 실패: ${msg}`);
+      // Quota/rate limit 에러 → 친절한 안내 메시지
+      if (msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('429')) {
+        setError('AI 무료 사용량을 초과했어요. 잠시 후(1~2분) 다시 시도해주세요. 🙏');
+      } else {
+        setError(`분석 실패: ${msg}`);
+      }
       setStep('upload');
     }
   }, [year, month, partnerNames]);
 
-  const handleFile = (file: File) => {
+  // 이미지를 최대 1024px로 리사이즈 + JPEG 압축 → 토큰 사용량 대폭 절감
+  const compressImage = (file: File): Promise<{ base64: string; mimeType: string; previewUrl: string }> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const MAX = 1024;
+        let { width, height } = img;
+        if (width > MAX || height > MAX) {
+          const ratio = Math.min(MAX / width, MAX / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
+        const dataURL = canvas.toDataURL('image/jpeg', 0.85);
+        const [header, base64] = dataURL.split(',');
+        const mimeType = header.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
+        resolve({ base64, mimeType, previewUrl: dataURL });
+      };
+      img.onerror = reject;
+      img.src = objectUrl;
+    });
+  };
+
+  const handleFile = async (file: File) => {
     if (!file.type.startsWith('image/')) {
       setError('이미지 파일만 업로드 가능해요.');
       return;
     }
     setError(null);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = reader.result as string;
-      const [header, base64] = result.split(',');
-      const mimeType = header.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
-      setImagePreview(result);
+    try {
+      const { base64, mimeType, previewUrl } = await compressImage(file);
+      setImagePreview(previewUrl);
       analyzeImage(base64, mimeType);
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      setError('이미지를 읽을 수 없어요. 다른 파일을 시도해주세요.');
+    }
   };
 
   const handleImport = async () => {
