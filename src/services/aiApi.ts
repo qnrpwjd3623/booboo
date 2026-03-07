@@ -375,7 +375,7 @@ export async function parseSpendingScreenshot(
     generationConfig: {
       temperature: 0.1,
       maxOutputTokens: 4096,
-      responseMimeType: 'application/json',
+      // Note: responseMimeType: 'application/json' is NOT supported for multimodal/vision requests
     },
   };
 
@@ -387,15 +387,19 @@ export async function parseSpendingScreenshot(
 
   if (!response.ok) {
     const err = await response.text();
+    console.error('Gemini Vision API raw error:', err);
     throw new Error(`Gemini Vision API error: ${response.status} ${err}`);
   }
 
   const data = await response.json();
+  console.log('Gemini Vision raw response:', JSON.stringify(data).slice(0, 500));
+
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error('Empty response from Gemini Vision');
 
+  // Extract JSON from the text response (model may wrap in markdown code blocks)
   const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('No JSON in response');
+  if (!jsonMatch) throw new Error('No JSON found in response');
 
   const parsed = JSON.parse(jsonMatch[0]);
   return (parsed.transactions || []) as ParsedTxnItem[];
