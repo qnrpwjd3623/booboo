@@ -292,10 +292,12 @@ export function useSupabaseFinanceData() {
     const loadLoans = async () => {
         const { data, error } = await supabase.from('loans').select('*');
         if (error) {
-            // loans 테이블이 아직 없을 수 있음 - 조용히 처리
-            if (error.code !== 'PGRST116' && !error.message?.includes('does not exist')) {
-                console.error('Load loans error:', error);
+            if (error.code === 'PGRST116' || error.message?.includes('does not exist')) {
+                // 테이블 없음 - 조용히 처리
+                return;
             }
+            // 그 외 에러 (RLS 차단, 권한 없음 등) - 콘솔에 표시
+            console.error('Load loans error (RLS 정책 또는 권한 확인 필요):', error.message, error.code);
             return;
         }
         setLoans((data || []).map(toAppLoan));
