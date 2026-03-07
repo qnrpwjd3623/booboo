@@ -422,14 +422,16 @@ function App() {
   }, [selectedYear, updateYearlySettings]);
 
   const handleClearYearTransactions = useCallback(async () => {
-    if (!confirm(`⚠️ ${selectedYear}년 거래내역을 모두 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
+    if (!confirm(`⚠️ ${selectedYear}년 거래내역을 모두 삭제하시겠습니까?\n(시작 순자산도 0으로 초기화됩니다)\n이 작업은 되돌릴 수 없습니다.`)) return;
     try {
       await deleteTransactionsByYear(selectedYear);
+      // 시작 순자산도 0으로 리셋
+      await updateYearlySettings(selectedYear, { startNetWorth: 0 });
     } catch (error) {
       const msg = error instanceof Error ? error.message : '삭제에 실패했습니다.';
       alert(`❌ 삭제 실패\n\n${msg}`);
     }
-  }, [selectedYear, deleteTransactionsByYear]);
+  }, [selectedYear, deleteTransactionsByYear, updateYearlySettings]);
 
   const openStockEdit = (stock: StockItem) => {
     setEditingStock(stock);
