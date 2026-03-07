@@ -77,7 +77,6 @@ export function SummaryCards({
   targetNetWorth,
   averageSavingsRate,
   previousNetWorth,
-  totalLoan = 0,
 }: SummaryCardsProps) {
   const [ref, isInView] = useInView<HTMLDivElement>({ threshold: 0.2 });
 

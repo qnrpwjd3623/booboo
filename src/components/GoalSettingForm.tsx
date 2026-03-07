@@ -12,7 +12,7 @@ interface GoalSettingFormProps {
   onClearYearData?: () => void;
 }
 
-export function GoalSettingForm({ isOpen, onClose, currentTarget, onSave, selectedYear, onClearYearData }: GoalSettingFormProps) {
+export function GoalSettingForm({ isOpen, onClose, currentTarget, onSave }: GoalSettingFormProps) {
   const [target, setTarget] = useState(currentTarget.toString());
   const [income, setIncome] = useState('');
   const [expense, setExpense] = useState('');
