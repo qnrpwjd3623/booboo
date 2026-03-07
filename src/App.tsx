@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SummaryCards } from '@/components/SummaryCards';
 import { GoalProgress } from '@/components/GoalProgress';
@@ -891,6 +892,17 @@ function App() {
   );
 }
 
+// Drag info type for FinancialProductsList
+interface FPDragInfo {
+  productId: string;
+  overIndex: number;
+  ghostY: number;       // Fixed Y of the ghost card (follows pointer)
+  grabOffsetY: number;  // Pointer's Y offset within the card at grab time
+  cardLeft: number;
+  cardWidth: number;
+  cardHeight: number;
+}
+
 // Financial Products List Component
 function FinancialProductsList({
   products,
@@ -945,15 +957,14 @@ function FinancialProductsList({
   const totalReturn = totalValue - totalPrincipal;
   const totalReturnRate = totalPrincipal > 0 ? (totalReturn / totalPrincipal) * 100 : 0;
 
-  // Drag-and-drop state (refs for stale-closure safety, state for rendering)
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [overIndex, setOverIndex] = useState<number>(-1);
+  // Drag state — ref for smooth pointermove updates, state for re-rendering
+  const [dragInfo, setDragInfo] = useState<FPDragInfo | null>(null);
+  const dragInfoRef = useRef<FPDragInfo | null>(null);
   const isDraggingRef = useRef(false);
-  const draggingIdRef = useRef<string | null>(null);
-  const overIndexRef = useRef<number>(-1);
-  const startPosRef = useRef({ x: 0, y: 0 });
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startPosRef = useRef({ x: 0, y: 0 });
   const itemElsRef = useRef<Map<string, HTMLElement>>(new Map());
+  const ghostElRef = useRef<HTMLDivElement | null>(null);
   const orderedProductsRef = useRef(orderedProducts);
   useEffect(() => { orderedProductsRef.current = orderedProducts; }, [orderedProducts]);
 
@@ -978,43 +989,53 @@ function FinancialProductsList({
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
-    if (commit && isDraggingRef.current && draggingIdRef.current !== null) {
+    if (commit && isDraggingRef.current && dragInfoRef.current) {
+      const { productId, overIndex } = dragInfoRef.current;
       const prods = orderedProductsRef.current;
-      const fromIdx = prods.findIndex(p => p.id === draggingIdRef.current);
-      const toIdx = overIndexRef.current;
-      if (fromIdx !== -1 && toIdx !== -1 && fromIdx !== toIdx) {
+      const fromIdx = prods.findIndex(p => p.id === productId);
+      if (fromIdx !== -1 && overIndex !== -1 && fromIdx !== overIndex) {
         const newOrder = prods.map(p => p.id);
         newOrder.splice(fromIdx, 1);
-        newOrder.splice(toIdx, 0, draggingIdRef.current!);
+        newOrder.splice(overIndex, 0, productId);
         localStorage.setItem(FP_ORDER_KEY, JSON.stringify(newOrder));
         setOrderedIds(newOrder);
       }
     }
+    document.body.style.userSelect = '';
     isDraggingRef.current = false;
-    draggingIdRef.current = null;
-    overIndexRef.current = -1;
-    setDraggingId(null);
-    setOverIndex(-1);
+    dragInfoRef.current = null;
+    setDragInfo(null);
   };
 
   const handleGripPointerDown = (e: React.PointerEvent, productId: string) => {
     e.preventDefault();
     startPosRef.current = { x: e.clientX, y: e.clientY };
-    const target = e.currentTarget as HTMLElement;
+    const gripEl = e.currentTarget as HTMLElement;
     const pointerId = e.pointerId;
     longPressTimerRef.current = setTimeout(() => {
+      const el = itemElsRef.current.get(productId);
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
       isDraggingRef.current = true;
-      draggingIdRef.current = productId;
-      try { target.setPointerCapture(pointerId); } catch {}
+      document.body.style.userSelect = 'none';
+      try { gripEl.setPointerCapture(pointerId); } catch {}
       const idx = orderedProductsRef.current.findIndex(p => p.id === productId);
-      overIndexRef.current = idx;
-      setDraggingId(productId);
-      setOverIndex(idx);
+      const info: FPDragInfo = {
+        productId,
+        overIndex: idx,
+        ghostY: rect.top,
+        grabOffsetY: startPosRef.current.y - rect.top,
+        cardLeft: rect.left,
+        cardWidth: rect.width,
+        cardHeight: rect.height,
+      };
+      dragInfoRef.current = info;
+      setDragInfo({ ...info });
     }, 400);
   };
 
   const handleGripPointerMove = (e: React.PointerEvent) => {
-    if (!isDraggingRef.current) {
+    if (!isDraggingRef.current || !dragInfoRef.current) {
       // Cancel long-press if pointer moved too much (user is scrolling)
       const dx = e.clientX - startPosRef.current.x;
       const dy = e.clientY - startPosRef.current.y;
@@ -1024,12 +1045,66 @@ function FinancialProductsList({
       }
       return;
     }
-    const idx = getIndexAtY(e.clientY);
-    if (idx !== -1) {
-      overIndexRef.current = idx;
-      setOverIndex(idx);
+    const newGhostY = e.clientY - dragInfoRef.current.grabOffsetY;
+    // Move ghost directly via DOM for 60fps smoothness (no re-render needed)
+    if (ghostElRef.current) {
+      ghostElRef.current.style.top = `${newGhostY}px`;
+    }
+    dragInfoRef.current.ghostY = newGhostY;
+
+    // Only re-render when the drop target index changes
+    const newOverIndex = getIndexAtY(e.clientY);
+    if (newOverIndex !== -1 && newOverIndex !== dragInfoRef.current.overIndex) {
+      dragInfoRef.current.overIndex = newOverIndex;
+      setDragInfo({ ...dragInfoRef.current });
     }
   };
+
+  // Ghost card rendered into document.body via portal (escapes any CSS transforms)
+  const ghost = dragInfo ? createPortal(
+    (() => {
+      const product = orderedProducts.find(p => p.id === dragInfo.productId);
+      if (!product) return null;
+      const rv = product.currentValue - product.principal;
+      const isProfit = rv >= 0;
+      return (
+        <div
+          ref={ghostElRef}
+          style={{
+            position: 'fixed',
+            top: dragInfo.ghostY,
+            left: dragInfo.cardLeft,
+            width: dragInfo.cardWidth,
+            zIndex: 9999,
+            pointerEvents: 'none',
+            transform: 'rotate(1.5deg) scale(1.02)',
+          }}
+          className="p-3 sm:p-4 bg-white rounded-xl sm:rounded-2xl border-2 border-blue-400 shadow-[0_20px_60px_rgba(0,0,0,0.25)]"
+          aria-hidden="true"
+        >
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex-shrink-0 text-blue-400">
+              <GripVertical className="w-4 h-4" />
+            </div>
+            <span className={`px-2 py-1 rounded-lg text-xs font-medium flex-shrink-0 ${typeColors[product.type]}`}>
+              {typeLabels[product.type]}
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{product.name}</p>
+              <p className="text-xs text-gray-500 truncate">{product.company}</p>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <p className="font-semibold text-gray-900 text-sm sm:text-base">{product.currentValue.toLocaleString()}원</p>
+              <p className={`text-xs ${isProfit ? 'text-green-500' : 'text-red-500'}`}>
+                {isProfit ? '+' : ''}{rv.toLocaleString()}원
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    })(),
+    document.body
+  ) : null;
 
   return (
     <motion.div
@@ -1059,8 +1134,8 @@ function FinancialProductsList({
         {orderedProducts.map((product, index) => {
           const returnValue = product.currentValue - product.principal;
           const isProfit = returnValue >= 0;
-          const isDraggingThis = draggingId === product.id;
-          const isOverTarget = overIndex === index && draggingId !== null && !isDraggingThis;
+          const isDraggingThis = dragInfo?.productId === product.id;
+          const isOverTarget = dragInfo !== null && dragInfo.overIndex === index && !isDraggingThis;
 
           return (
             <div
@@ -1069,54 +1144,56 @@ function FinancialProductsList({
                 if (el) itemElsRef.current.set(product.id, el);
                 else itemElsRef.current.delete(product.id);
               }}
-              className={`group relative p-3 sm:p-4 bg-gray-50 rounded-xl sm:rounded-2xl transition-all duration-150
-                ${isDraggingThis ? 'opacity-40 ring-2 ring-blue-400 ring-offset-1' : 'hover:bg-gray-100'}
-                ${isOverTarget ? 'ring-2 ring-blue-300 bg-blue-50' : ''}
-              `}
+              className={
+                isDraggingThis
+                  // Placeholder: dashed outline holds the space while ghost floats
+                  ? 'rounded-xl sm:rounded-2xl border-2 border-dashed border-blue-300 bg-blue-50/30 transition-all duration-150'
+                  : `group relative p-3 sm:p-4 bg-gray-50 rounded-xl sm:rounded-2xl transition-all duration-150
+                     ${isOverTarget ? 'ring-2 ring-blue-400 bg-blue-50 scale-[1.01]' : 'hover:bg-gray-100'}`
+              }
+              style={isDraggingThis ? { minHeight: dragInfo?.cardHeight ?? 60 } : {}}
             >
-              <div className="flex items-center gap-2 sm:gap-3">
-                {/* Long-press drag handle */}
-                <div
-                  className="flex-shrink-0 touch-none select-none text-gray-300 hover:text-gray-500 active:text-blue-500 transition-colors cursor-grab active:cursor-grabbing"
-                  onPointerDown={e => handleGripPointerDown(e, product.id)}
-                  onPointerMove={handleGripPointerMove}
-                  onPointerUp={() => endDrag(true)}
-                  onPointerCancel={() => endDrag(false)}
-                  onContextMenu={e => e.preventDefault()}
-                  title="꾹 눌러서 순서 변경"
-                >
-                  <GripVertical className="w-4 h-4" />
-                </div>
-
-                <span className={`px-2 py-1 rounded-lg text-xs font-medium flex-shrink-0 ${typeColors[product.type]}`}>
-                  {typeLabels[product.type]}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{product.name}</p>
-                  <p className="text-xs text-gray-500 truncate">{product.company}</p>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="font-semibold text-gray-900 text-sm sm:text-base">{product.currentValue.toLocaleString()}원</p>
-                  <p className={`text-xs ${isProfit ? 'text-green-500' : 'text-red-500'}`}>
-                    {isProfit ? '+' : ''}{returnValue.toLocaleString()}원
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-2 pt-2 border-t border-gray-200 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={() => { if (!isDraggingRef.current) onEdit(product); }}
-                  className="text-xs text-blue-500 hover:underline"
-                >
-                  수정
-                </button>
-                <button
-                  onClick={() => { if (!isDraggingRef.current) onDelete(product.id); }}
-                  className="text-xs text-red-500 hover:underline"
-                >
-                  삭제
-                </button>
-              </div>
+              {!isDraggingThis && (
+                <>
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    {/* Long-press drag handle */}
+                    <div
+                      className="flex-shrink-0 touch-none select-none text-gray-300 hover:text-gray-500 active:text-blue-500 transition-colors cursor-grab active:cursor-grabbing"
+                      onPointerDown={e => handleGripPointerDown(e, product.id)}
+                      onPointerMove={handleGripPointerMove}
+                      onPointerUp={() => endDrag(true)}
+                      onPointerCancel={() => endDrag(false)}
+                      onContextMenu={e => e.preventDefault()}
+                      title="꾹 눌러서 순서 변경"
+                    >
+                      <GripVertical className="w-4 h-4" />
+                    </div>
+                    <span className={`px-2 py-1 rounded-lg text-xs font-medium flex-shrink-0 ${typeColors[product.type]}`}>
+                      {typeLabels[product.type]}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{product.name}</p>
+                      <p className="text-xs text-gray-500 truncate">{product.company}</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="font-semibold text-gray-900 text-sm sm:text-base">{product.currentValue.toLocaleString()}원</p>
+                      <p className={`text-xs ${isProfit ? 'text-green-500' : 'text-red-500'}`}>
+                        {isProfit ? '+' : ''}{returnValue.toLocaleString()}원
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-gray-200 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => { if (!isDraggingRef.current) onEdit(product); }}
+                      className="text-xs text-blue-500 hover:underline"
+                    >수정</button>
+                    <button
+                      onClick={() => { if (!isDraggingRef.current) onDelete(product.id); }}
+                      className="text-xs text-red-500 hover:underline"
+                    >삭제</button>
+                  </div>
+                </>
+              )}
             </div>
           );
         })}
@@ -1132,6 +1209,8 @@ function FinancialProductsList({
           <span className="font-semibold">{totalValue.toLocaleString()}원</span>
         </div>
       </div>
+
+      {ghost}
     </motion.div>
   );
 }
