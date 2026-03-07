@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, TrendingDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, RefreshCw, Sparkles } from 'lucide-react';
 import type { Transaction } from '@/types';
 import { getCategoryIcon } from '@/constants/categories';
 import { getPersonCharacterComment } from '@/services/aiApi';
@@ -46,19 +46,23 @@ export function PersonSpendingCard({ name, emoji, transactions, partnerName, ind
       .map(([category, amount]) => ({ category, amount }));
   }, [transactions]);
 
-  // AI 코멘트 fetch (income/expense 변경 시에만)
-  useEffect(() => {
+  // 버튼 클릭 시에만 AI 코멘트 호출
+  const handleRefreshComment = async () => {
+    if (isLoadingComment) return;
     if (income === 0 && expense === 0) {
       setComment('이번 달 기록이 없어! 📝');
       return;
     }
     setIsLoadingComment(true);
-    getPersonCharacterComment(name, income, expense, topCategories, partnerName)
-      .then((c) => setComment(c))
-      .catch(() => setComment('이번달 어떻게 됐더라... 🤔'))
-      .finally(() => setIsLoadingComment(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [income, expense, name, partnerName]);
+    try {
+      const c = await getPersonCharacterComment(name, income, expense, topCategories, partnerName);
+      setComment(c);
+    } catch {
+      setComment('이번달 어떻게 됐더라... 🤔');
+    } finally {
+      setIsLoadingComment(false);
+    }
+  };
 
   const savingsColor =
     savingsRate >= 30 ? 'text-green-500' : savingsRate >= 10 ? 'text-amber-500' : 'text-red-500';
@@ -123,17 +127,43 @@ export function PersonSpendingCard({ name, emoji, transactions, partnerName, ind
 
       {/* AI 말풍선 */}
       <div className="mt-auto">
-        <div className="relative bg-gray-50 rounded-2xl px-4 py-3 text-sm text-gray-700">
+        {/* 말풍선 헤더: 라벨 + 새로고침 버튼 */}
+        <div className="flex items-center justify-between mb-1.5 px-1">
+          <span className="text-xs text-gray-400 font-medium flex items-center gap-1">
+            <Sparkles className="w-3 h-3" />
+            AI 한마디
+          </span>
+          <button
+            onClick={handleRefreshComment}
+            disabled={isLoadingComment}
+            title="AI 코멘트 새로 받기"
+            className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full transition-all font-medium ${
+              isLoadingComment
+                ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                : 'bg-orange-50 text-orange-500 hover:bg-orange-100 active:scale-95'
+            }`}
+          >
+            <RefreshCw className={`w-3 h-3 ${isLoadingComment ? 'animate-spin' : ''}`} />
+            {isLoadingComment ? '생성 중' : comment ? '다시' : '생성'}
+          </button>
+        </div>
+
+        {/* 말풍선 본체 */}
+        <div className="relative bg-gray-50 rounded-2xl px-4 py-3 text-sm text-gray-700 min-h-[48px] flex items-center">
           {/* 말풍선 꼬리 */}
           <div className="absolute -top-2 left-5 w-4 h-4 bg-gray-50 rotate-45 rounded-sm" />
           {isLoadingComment ? (
-            <div className="flex items-center gap-2 h-5">
+            <div className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce [animation-delay:0ms]" />
               <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce [animation-delay:150ms]" />
               <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce [animation-delay:300ms]" />
             </div>
+          ) : comment ? (
+            <p className="leading-snug">{comment}</p>
           ) : (
-            <p className="leading-snug">{comment || '이번달 어떻게 됐더라... 🤔'}</p>
+            <p className="text-gray-400 text-xs leading-snug">
+              위 버튼을 눌러 {name}의 이번달 한마디를 들어봐! ✨
+            </p>
           )}
         </div>
       </div>
