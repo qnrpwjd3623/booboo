@@ -6,7 +6,7 @@ export const formatCurrency = (value: number): string => {
   if (value >= 100000000) {
     return `${(value / 100000000).toFixed(1)}억원`;
   } else if (value >= 10000) {
-    return `${(value / 10000).toFixed(0)}만원`;
+    return `${Math.round(value / 10000).toLocaleString()}만원`;
   }
   return `${value.toLocaleString()}원`;
 };

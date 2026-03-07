@@ -60,15 +60,30 @@ export function NetWorthChart({ monthlyData, targetNetWorth }: NetWorthChartProp
   const validData = monthlyData.filter(d => d.netWorth > 0);
   const currentMonth = validData[validData.length - 1];
   const previousMonth = validData.length > 1 ? validData[validData.length - 2] : null;
-  
-  const monthlyGrowth = previousMonth 
+
+  const monthlyGrowth = previousMonth
     ? calculateGrowthRate(currentMonth.netWorth, previousMonth.netWorth)
     : 0;
 
+  // Target line = 1월 순자산 + 올해 목표금액 (converted to 억원)
+  const firstMonthNetWorth = validData.length > 0 ? validData[0].netWorth : 0;
+  const effectiveTarget = (firstMonthNetWorth + targetNetWorth) / 100000000;
+
+  // Future months show as null so they don't drop to 0 on the chart
   const chartData = monthlyData.map(d => ({
     ...d,
-    netWorth: d.netWorth / 100000000, // Convert to 억원 for display
+    netWorth: d.netWorth > 0 ? d.netWorth / 100000000 : null,
   }));
+
+  // Smart Y-axis domain: fit the actual data range + target line, with padding
+  const validChartValues = chartData.filter(d => d.netWorth != null).map(d => d.netWorth as number);
+  const allValues = validChartValues.length > 0 ? [...validChartValues, effectiveTarget] : [effectiveTarget, 0];
+  const dataMin = Math.min(...allValues);
+  const dataMax = Math.max(...allValues);
+  const range = dataMax - dataMin;
+  const padding = range > 0 ? range * 0.2 : Math.max(dataMax * 0.1, 0.1);
+  const yDomainMin = Math.max(0, dataMin - padding);
+  const yDomainMax = dataMax + padding;
 
   return (
     <motion.div
@@ -117,17 +132,18 @@ export function NetWorthChart({ monthlyData, targetNetWorth }: NetWorthChartProp
               tick={{ fill: '#8E8E93', fontSize: 12 }}
               dy={10}
             />
-            <YAxis 
+            <YAxis
               axisLine={false}
               tickLine={false}
               tick={{ fill: '#8E8E93', fontSize: 12 }}
-              tickFormatter={(value) => `${value}억`}
+              tickFormatter={(value) => `${value.toFixed(1)}억`}
               dx={-10}
+              domain={[yDomainMin, yDomainMax]}
             />
             <Tooltip content={<CustomTooltip />} />
-            <ReferenceLine 
-              y={targetNetWorth / 100000000} 
-              stroke="#34C759" 
+            <ReferenceLine
+              y={effectiveTarget}
+              stroke="#34C759"
               strokeDasharray="5 5"
               strokeWidth={2}
             />

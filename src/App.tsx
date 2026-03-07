@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SummaryCards } from '@/components/SummaryCards';
 import { GoalProgress } from '@/components/GoalProgress';
@@ -22,7 +22,7 @@ import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchMultipleStockPrices, startStockPriceAutoUpdate } from '@/services/stockApi';
 import { getFinancialAdvice, getMonthlyChallenge, type FinancialContext } from '@/services/aiApi';
-import { Heart, Sparkles, Wallet, TrendingUp, PiggyBank, CreditCard, Menu, X, Settings, Target, Loader2, LogOut } from 'lucide-react';
+import { Heart, Sparkles, Wallet, TrendingUp, PiggyBank, CreditCard, Menu, X, Settings, Target, Loader2, LogOut, GripVertical } from 'lucide-react';
 import type { Transaction, StockItem, FinancialProduct, LoanItem, BotMessage, Challenge } from '@/types';
 
 // Generate yearly data from stored data
@@ -901,6 +901,8 @@ function FinancialProductsList({
   onEdit: (product: FinancialProduct) => void;
   onDelete: (id: string) => void;
 }) {
+  const FP_ORDER_KEY = 'fp-order';
+
   const typeLabels: Record<string, string> = {
     irp: 'IRP',
     isa: 'ISA',
@@ -921,10 +923,113 @@ function FinancialProductsList({
     realestate: 'bg-amber-100 text-amber-600',
   };
 
+  // Ordered IDs, persisted to localStorage
+  const [orderedIds, setOrderedIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(FP_ORDER_KEY);
+      if (saved) return JSON.parse(saved) as string[];
+    } catch {}
+    return products.map(p => p.id);
+  });
+
+  // Merge: keep saved order for existing items, append new ones at the end
+  const orderedProducts = useMemo(() => {
+    const productMap = new Map(products.map(p => [p.id, p]));
+    const ordered = orderedIds.filter(id => productMap.has(id)).map(id => productMap.get(id)!);
+    const extras = products.filter(p => !orderedIds.includes(p.id));
+    return [...ordered, ...extras];
+  }, [products, orderedIds]);
+
   const totalPrincipal = products.reduce((sum, p) => sum + p.principal, 0);
   const totalValue = products.reduce((sum, p) => sum + p.currentValue, 0);
   const totalReturn = totalValue - totalPrincipal;
   const totalReturnRate = totalPrincipal > 0 ? (totalReturn / totalPrincipal) * 100 : 0;
+
+  // Drag-and-drop state (refs for stale-closure safety, state for rendering)
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [overIndex, setOverIndex] = useState<number>(-1);
+  const isDraggingRef = useRef(false);
+  const draggingIdRef = useRef<string | null>(null);
+  const overIndexRef = useRef<number>(-1);
+  const startPosRef = useRef({ x: 0, y: 0 });
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const itemElsRef = useRef<Map<string, HTMLElement>>(new Map());
+  const orderedProductsRef = useRef(orderedProducts);
+  useEffect(() => { orderedProductsRef.current = orderedProducts; }, [orderedProducts]);
+
+  // Find which list index is closest to a given clientY
+  const getIndexAtY = (clientY: number): number => {
+    const prods = orderedProductsRef.current;
+    let closest = -1;
+    let closestDist = Infinity;
+    prods.forEach((p, i) => {
+      const el = itemElsRef.current.get(p.id);
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      const dist = Math.abs(clientY - mid);
+      if (dist < closestDist) { closestDist = dist; closest = i; }
+    });
+    return closest;
+  };
+
+  const endDrag = (commit: boolean) => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    if (commit && isDraggingRef.current && draggingIdRef.current !== null) {
+      const prods = orderedProductsRef.current;
+      const fromIdx = prods.findIndex(p => p.id === draggingIdRef.current);
+      const toIdx = overIndexRef.current;
+      if (fromIdx !== -1 && toIdx !== -1 && fromIdx !== toIdx) {
+        const newOrder = prods.map(p => p.id);
+        newOrder.splice(fromIdx, 1);
+        newOrder.splice(toIdx, 0, draggingIdRef.current!);
+        localStorage.setItem(FP_ORDER_KEY, JSON.stringify(newOrder));
+        setOrderedIds(newOrder);
+      }
+    }
+    isDraggingRef.current = false;
+    draggingIdRef.current = null;
+    overIndexRef.current = -1;
+    setDraggingId(null);
+    setOverIndex(-1);
+  };
+
+  const handleGripPointerDown = (e: React.PointerEvent, productId: string) => {
+    e.preventDefault();
+    startPosRef.current = { x: e.clientX, y: e.clientY };
+    const target = e.currentTarget as HTMLElement;
+    const pointerId = e.pointerId;
+    longPressTimerRef.current = setTimeout(() => {
+      isDraggingRef.current = true;
+      draggingIdRef.current = productId;
+      try { target.setPointerCapture(pointerId); } catch {}
+      const idx = orderedProductsRef.current.findIndex(p => p.id === productId);
+      overIndexRef.current = idx;
+      setDraggingId(productId);
+      setOverIndex(idx);
+    }, 400);
+  };
+
+  const handleGripPointerMove = (e: React.PointerEvent) => {
+    if (!isDraggingRef.current) {
+      // Cancel long-press if pointer moved too much (user is scrolling)
+      const dx = e.clientX - startPosRef.current.x;
+      const dy = e.clientY - startPosRef.current.y;
+      if (Math.hypot(dx, dy) > 8 && longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+      return;
+    }
+    const idx = getIndexAtY(e.clientY);
+    if (idx !== -1) {
+      overIndexRef.current = idx;
+      setOverIndex(idx);
+    }
+  };
 
   return (
     <motion.div
@@ -951,29 +1056,46 @@ function FinancialProductsList({
       </div>
 
       <div className="space-y-2 sm:space-y-3">
-        {products.map((product, index) => {
+        {orderedProducts.map((product, index) => {
           const returnValue = product.currentValue - product.principal;
           const isProfit = returnValue >= 0;
+          const isDraggingThis = draggingId === product.id;
+          const isOverTarget = overIndex === index && draggingId !== null && !isDraggingThis;
 
           return (
-            <motion.div
+            <div
               key={product.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.05 }}
-              className="group p-3 sm:p-4 bg-gray-50 rounded-xl sm:rounded-2xl hover:bg-gray-100 transition-colors"
+              ref={el => {
+                if (el) itemElsRef.current.set(product.id, el);
+                else itemElsRef.current.delete(product.id);
+              }}
+              className={`group relative p-3 sm:p-4 bg-gray-50 rounded-xl sm:rounded-2xl transition-all duration-150
+                ${isDraggingThis ? 'opacity-40 ring-2 ring-blue-400 ring-offset-1' : 'hover:bg-gray-100'}
+                ${isOverTarget ? 'ring-2 ring-blue-300 bg-blue-50' : ''}
+              `}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <span className={`px-2 py-1 rounded-lg text-xs font-medium ${typeColors[product.type]}`}>
-                    {typeLabels[product.type]}
-                  </span>
-                  <div>
-                    <p className="font-semibold text-gray-900 text-sm sm:text-base">{product.name}</p>
-                    <p className="text-xs text-gray-500">{product.company}</p>
-                  </div>
+              <div className="flex items-center gap-2 sm:gap-3">
+                {/* Long-press drag handle */}
+                <div
+                  className="flex-shrink-0 touch-none select-none text-gray-300 hover:text-gray-500 active:text-blue-500 transition-colors cursor-grab active:cursor-grabbing"
+                  onPointerDown={e => handleGripPointerDown(e, product.id)}
+                  onPointerMove={handleGripPointerMove}
+                  onPointerUp={() => endDrag(true)}
+                  onPointerCancel={() => endDrag(false)}
+                  onContextMenu={e => e.preventDefault()}
+                  title="꾹 눌러서 순서 변경"
+                >
+                  <GripVertical className="w-4 h-4" />
                 </div>
-                <div className="text-right">
+
+                <span className={`px-2 py-1 rounded-lg text-xs font-medium flex-shrink-0 ${typeColors[product.type]}`}>
+                  {typeLabels[product.type]}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{product.name}</p>
+                  <p className="text-xs text-gray-500 truncate">{product.company}</p>
+                </div>
+                <div className="text-right flex-shrink-0">
                   <p className="font-semibold text-gray-900 text-sm sm:text-base">{product.currentValue.toLocaleString()}원</p>
                   <p className={`text-xs ${isProfit ? 'text-green-500' : 'text-red-500'}`}>
                     {isProfit ? '+' : ''}{returnValue.toLocaleString()}원
@@ -983,19 +1105,19 @@ function FinancialProductsList({
 
               <div className="mt-2 pt-2 border-t border-gray-200 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
-                  onClick={() => onEdit(product)}
+                  onClick={() => { if (!isDraggingRef.current) onEdit(product); }}
                   className="text-xs text-blue-500 hover:underline"
                 >
                   수정
                 </button>
                 <button
-                  onClick={() => onDelete(product.id)}
+                  onClick={() => { if (!isDraggingRef.current) onDelete(product.id); }}
                   className="text-xs text-red-500 hover:underline"
                 >
                   삭제
                 </button>
               </div>
-            </motion.div>
+            </div>
           );
         })}
       </div>
