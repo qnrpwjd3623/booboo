@@ -45,8 +45,10 @@ const avatarOptions = [
 
 export function CoupleProfileSettings({ isOpen, onClose, profile, onSave }: CoupleProfileProps) {
   const [editedProfile, setEditedProfile] = useState(profile);
-  const [editingPartner, setEditingPartner] = useState<1 | 2 | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // 카메라 클릭 시 양쪽 이모지 선택창 동시에 표시
+  const [showEmojiPickers, setShowEmojiPickers] = useState(false);
+  const fileInput1Ref = useRef<HTMLInputElement>(null);
+  const fileInput2Ref = useRef<HTMLInputElement>(null);
 
   const handleSave = () => {
     onSave(editedProfile);
@@ -92,7 +94,7 @@ export function CoupleProfileSettings({ isOpen, onClose, profile, onSave }: Coup
           {/* Partner 1 */}
           <div className="p-4 bg-gray-50 rounded-2xl">
             <p className="text-sm font-medium text-gray-500 mb-3">파트너 1</p>
-            
+
             {/* Avatar */}
             <div className="flex justify-center mb-3">
               <div className="relative">
@@ -108,8 +110,10 @@ export function CoupleProfileSettings({ isOpen, onClose, profile, onSave }: Coup
                   </div>
                 )}
                 <button
-                  onClick={() => setEditingPartner(1)}
-                  className="absolute -bottom-1 -right-1 w-8 h-8 bg-white rounded-full shadow-md flex items-center justify-center hover:bg-gray-50 transition-colors"
+                  onClick={() => setShowEmojiPickers(prev => !prev)}
+                  className={`absolute -bottom-1 -right-1 w-8 h-8 bg-white rounded-full shadow-md flex items-center justify-center hover:bg-gray-50 transition-colors ${
+                    showEmojiPickers ? 'ring-2 ring-blue-400' : ''
+                  }`}
                 >
                   <Camera className="w-4 h-4 text-gray-600" />
                 </button>
@@ -120,18 +124,18 @@ export function CoupleProfileSettings({ isOpen, onClose, profile, onSave }: Coup
             <input
               type="text"
               value={editedProfile.partner1.name}
-              onChange={(e) => setEditedProfile(prev => ({ 
-                ...prev, 
-                partner1: { ...prev.partner1, name: e.target.value } 
+              onChange={(e) => setEditedProfile(prev => ({
+                ...prev,
+                partner1: { ...prev.partner1, name: e.target.value }
               }))}
               placeholder="이름"
               className="w-full px-3 py-2 bg-white rounded-lg text-center text-sm font-medium text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             />
 
-            {/* Emoji Selector */}
-            {editingPartner === 1 && (
+            {/* Emoji Selector — 공통 showEmojiPickers로 제어 */}
+            {showEmojiPickers && (
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="mt-3 p-3 bg-white rounded-xl"
               >
@@ -141,11 +145,10 @@ export function CoupleProfileSettings({ isOpen, onClose, profile, onSave }: Coup
                     <button
                       key={opt.emoji}
                       onClick={() => {
-                        setEditedProfile(prev => ({ 
-                          ...prev, 
-                          partner1: { ...prev.partner1, emoji: opt.emoji, avatar: '' } 
+                        setEditedProfile(prev => ({
+                          ...prev,
+                          partner1: { ...prev.partner1, emoji: opt.emoji, avatar: '' }
                         }));
-                        setEditingPartner(null);
                       }}
                       className={`p-2 rounded-lg text-2xl hover:bg-gray-100 transition-colors ${
                         editedProfile.partner1.emoji === opt.emoji ? 'bg-blue-100 ring-2 ring-blue-500' : ''
@@ -157,14 +160,14 @@ export function CoupleProfileSettings({ isOpen, onClose, profile, onSave }: Coup
                   ))}
                 </div>
                 <input
-                  ref={fileInputRef}
+                  ref={fileInput1Ref}
                   type="file"
                   accept="image/*"
                   onChange={(e) => handleImageUpload(1, e)}
                   className="hidden"
                 />
                 <button
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => fileInput1Ref.current?.click()}
                   className="mt-2 w-full py-2 text-xs text-blue-500 hover:text-blue-600 flex items-center justify-center gap-1"
                 >
                   <Camera className="w-3 h-3" />
@@ -177,7 +180,7 @@ export function CoupleProfileSettings({ isOpen, onClose, profile, onSave }: Coup
           {/* Partner 2 */}
           <div className="p-4 bg-gray-50 rounded-2xl">
             <p className="text-sm font-medium text-gray-500 mb-3">파트너 2</p>
-            
+
             {/* Avatar */}
             <div className="flex justify-center mb-3">
               <div className="relative">
@@ -193,8 +196,10 @@ export function CoupleProfileSettings({ isOpen, onClose, profile, onSave }: Coup
                   </div>
                 )}
                 <button
-                  onClick={() => setEditingPartner(2)}
-                  className="absolute -bottom-1 -right-1 w-8 h-8 bg-white rounded-full shadow-md flex items-center justify-center hover:bg-gray-50 transition-colors"
+                  onClick={() => setShowEmojiPickers(prev => !prev)}
+                  className={`absolute -bottom-1 -right-1 w-8 h-8 bg-white rounded-full shadow-md flex items-center justify-center hover:bg-gray-50 transition-colors ${
+                    showEmojiPickers ? 'ring-2 ring-pink-400' : ''
+                  }`}
                 >
                   <Camera className="w-4 h-4 text-gray-600" />
                 </button>
@@ -205,18 +210,18 @@ export function CoupleProfileSettings({ isOpen, onClose, profile, onSave }: Coup
             <input
               type="text"
               value={editedProfile.partner2.name}
-              onChange={(e) => setEditedProfile(prev => ({ 
-                ...prev, 
-                partner2: { ...prev.partner2, name: e.target.value } 
+              onChange={(e) => setEditedProfile(prev => ({
+                ...prev,
+                partner2: { ...prev.partner2, name: e.target.value }
               }))}
               placeholder="이름"
               className="w-full px-3 py-2 bg-white rounded-lg text-center text-sm font-medium text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-500/20"
             />
 
-            {/* Emoji Selector */}
-            {editingPartner === 2 && (
+            {/* Emoji Selector — 공통 showEmojiPickers로 제어 */}
+            {showEmojiPickers && (
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="mt-3 p-3 bg-white rounded-xl"
               >
@@ -226,11 +231,10 @@ export function CoupleProfileSettings({ isOpen, onClose, profile, onSave }: Coup
                     <button
                       key={opt.emoji}
                       onClick={() => {
-                        setEditedProfile(prev => ({ 
-                          ...prev, 
-                          partner2: { ...prev.partner2, emoji: opt.emoji, avatar: '' } 
+                        setEditedProfile(prev => ({
+                          ...prev,
+                          partner2: { ...prev.partner2, emoji: opt.emoji, avatar: '' }
                         }));
-                        setEditingPartner(null);
                       }}
                       className={`p-2 rounded-lg text-2xl hover:bg-gray-100 transition-colors ${
                         editedProfile.partner2.emoji === opt.emoji ? 'bg-pink-100 ring-2 ring-pink-500' : ''
@@ -242,19 +246,14 @@ export function CoupleProfileSettings({ isOpen, onClose, profile, onSave }: Coup
                   ))}
                 </div>
                 <input
+                  ref={fileInput2Ref}
                   type="file"
                   accept="image/*"
                   onChange={(e) => handleImageUpload(2, e)}
                   className="hidden"
                 />
                 <button
-                  onClick={() => {
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = 'image/*';
-                    input.onchange = (e) => handleImageUpload(2, e as unknown as React.ChangeEvent<HTMLInputElement>);
-                    input.click();
-                  }}
+                  onClick={() => fileInput2Ref.current?.click()}
                   className="mt-2 w-full py-2 text-xs text-pink-500 hover:text-pink-600 flex items-center justify-center gap-1"
                 >
                   <Camera className="w-3 h-3" />

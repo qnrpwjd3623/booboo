@@ -135,6 +135,23 @@ function App() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [navDirection, setNavDirection] = useState<'prev' | 'next'>('next');
 
+  const monthSlideVariants = {
+    initial: (dir: 'prev' | 'next') => ({
+      opacity: 0,
+      x: dir === 'next' ? 48 : -48,
+    }),
+    animate: {
+      opacity: 1,
+      x: 0,
+      transition: { duration: 0.22, ease: 'easeInOut' },
+    },
+    exit: (dir: 'prev' | 'next') => ({
+      opacity: 0,
+      x: dir === 'next' ? -48 : 48,
+      transition: { duration: 0.22, ease: 'easeInOut' },
+    }),
+  };
+
   const {
     transactions,
     stocks,
@@ -511,15 +528,16 @@ function App() {
       </header>
 
       {/* Main Content — 월 선택 시: 월간뷰 / 아닐 때: 메인 대시보드 */}
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait" custom={navDirection}>
         {selectedMonth !== null ? (
           /* ── 월간 거래 관리 화면 ── */
           <motion.div
             key={`monthly-${selectedYear}-${selectedMonth}`}
-            initial={{ opacity: 0, x: navDirection === 'next' ? 40 : -40 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: navDirection === 'next' ? -40 : 40 }}
-            transition={{ duration: 0.22, ease: 'easeInOut' }}
+            custom={navDirection}
+            variants={monthSlideVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
           >
             <MonthlyTransactionView
               year={selectedYear}
