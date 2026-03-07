@@ -1010,7 +1010,6 @@ function FinancialProductsList({
   const handleGripPointerDown = (e: React.PointerEvent, productId: string) => {
     e.preventDefault();
     startPosRef.current = { x: e.clientX, y: e.clientY };
-    const gripEl = e.currentTarget as HTMLElement;
     const pointerId = e.pointerId;
     longPressTimerRef.current = setTimeout(() => {
       const el = itemElsRef.current.get(productId);
@@ -1018,7 +1017,6 @@ function FinancialProductsList({
       const rect = el.getBoundingClientRect();
       isDraggingRef.current = true;
       document.body.style.userSelect = 'none';
-      try { gripEl.setPointerCapture(pointerId); } catch {}
       const idx = orderedProductsRef.current.findIndex(p => p.id === productId);
       const info: FPDragInfo = {
         productId,
@@ -1031,32 +1029,43 @@ function FinancialProductsList({
       };
       dragInfoRef.current = info;
       setDragInfo({ ...info });
+
+      // Attach window-level events so the ghost follows the pointer even after
+      // the grip element is removed from the DOM (isDraggingThis → placeholder).
+      const onWindowMove = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId || !dragInfoRef.current) return;
+        const newGhostY = ev.clientY - dragInfoRef.current.grabOffsetY;
+        // Direct DOM update — 60fps with no React re-render
+        if (ghostElRef.current) ghostElRef.current.style.top = `${newGhostY}px`;
+        dragInfoRef.current.ghostY = newGhostY;
+        // Re-render only when the drop target index changes
+        const newIdx = getIndexAtY(ev.clientY);
+        if (newIdx !== -1 && newIdx !== dragInfoRef.current.overIndex) {
+          dragInfoRef.current.overIndex = newIdx;
+          setDragInfo({ ...dragInfoRef.current });
+        }
+      };
+      const onWindowUp = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return;
+        window.removeEventListener('pointermove', onWindowMove);
+        window.removeEventListener('pointerup', onWindowUp);
+        window.removeEventListener('pointercancel', onWindowUp);
+        endDrag(ev.type === 'pointerup');
+      };
+      window.addEventListener('pointermove', onWindowMove);
+      window.addEventListener('pointerup', onWindowUp);
+      window.addEventListener('pointercancel', onWindowUp);
     }, 400);
   };
 
+  // Only used during the 400ms long-press wait to cancel if the pointer moves
   const handleGripPointerMove = (e: React.PointerEvent) => {
-    if (!isDraggingRef.current || !dragInfoRef.current) {
-      // Cancel long-press if pointer moved too much (user is scrolling)
-      const dx = e.clientX - startPosRef.current.x;
-      const dy = e.clientY - startPosRef.current.y;
-      if (Math.hypot(dx, dy) > 8 && longPressTimerRef.current) {
-        clearTimeout(longPressTimerRef.current);
-        longPressTimerRef.current = null;
-      }
-      return;
-    }
-    const newGhostY = e.clientY - dragInfoRef.current.grabOffsetY;
-    // Move ghost directly via DOM for 60fps smoothness (no re-render needed)
-    if (ghostElRef.current) {
-      ghostElRef.current.style.top = `${newGhostY}px`;
-    }
-    dragInfoRef.current.ghostY = newGhostY;
-
-    // Only re-render when the drop target index changes
-    const newOverIndex = getIndexAtY(e.clientY);
-    if (newOverIndex !== -1 && newOverIndex !== dragInfoRef.current.overIndex) {
-      dragInfoRef.current.overIndex = newOverIndex;
-      setDragInfo({ ...dragInfoRef.current });
+    if (isDraggingRef.current) return; // window events handle it from here
+    const dx = e.clientX - startPosRef.current.x;
+    const dy = e.clientY - startPosRef.current.y;
+    if (Math.hypot(dx, dy) > 8 && longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
     }
   };
 
@@ -1077,7 +1086,6 @@ function FinancialProductsList({
             width: dragInfo.cardWidth,
             zIndex: 9999,
             pointerEvents: 'none',
-            transform: 'rotate(1.5deg) scale(1.02)',
           }}
           className="p-3 sm:p-4 bg-white rounded-xl sm:rounded-2xl border-2 border-blue-400 shadow-[0_20px_60px_rgba(0,0,0,0.25)]"
           aria-hidden="true"
