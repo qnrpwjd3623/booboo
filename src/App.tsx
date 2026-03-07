@@ -143,12 +143,10 @@ function App() {
     animate: {
       opacity: 1,
       x: 0,
-      transition: { duration: 0.22, ease: 'easeInOut' },
     },
     exit: (dir: 'prev' | 'next') => ({
       opacity: 0,
       x: dir === 'next' ? -48 : 48,
-      transition: { duration: 0.22, ease: 'easeInOut' },
     }),
   };
 
@@ -538,6 +536,7 @@ function App() {
             initial="initial"
             animate="animate"
             exit="exit"
+            transition={{ duration: 0.22, ease: 'easeInOut' }}
           >
             <MonthlyTransactionView
               year={selectedYear}
