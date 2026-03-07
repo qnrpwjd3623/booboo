@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Target, TrendingUp, PiggyBank, Calculator, Lightbulb, Trash2 } from 'lucide-react';
+import { Target, TrendingUp, PiggyBank, Calculator, Lightbulb } from 'lucide-react';
 import { Modal } from './Modal';
 
 interface GoalSettingFormProps {
@@ -168,18 +168,6 @@ export function GoalSettingForm({ isOpen, onClose, currentTarget, onSave, select
             <li>• 연말 병수당, 퇴직금 등을 고려해서 설정하세요</li>
           </ul>
         </div>
-
-        {/* 연도 거래내역 초기화 */}
-        {onClearYearData && (
-          <button
-            type="button"
-            onClick={onClearYearData}
-            className="w-full py-3 bg-red-50 hover:bg-red-100 text-red-600 font-medium rounded-xl transition-all flex items-center justify-center gap-2 border border-red-200"
-          >
-            <Trash2 className="w-4 h-4" />
-            {selectedYear}년 거래내역 초기화
-          </button>
-        )}
 
         {/* Submit Button */}
         <button

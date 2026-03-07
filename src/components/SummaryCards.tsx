@@ -1,6 +1,6 @@
 import { useCountUp } from '@/hooks/useCountUp';
 import { useInView } from '@/hooks/useInView';
-import { TrendingUp, TrendingDown, Minus, Wallet, Target, PiggyBank, CreditCard } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Wallet, Target, PiggyBank } from 'lucide-react';
 import { formatCurrency, calculateGrowthRate } from '@/utils/format';
 
 interface SummaryCardsProps {
@@ -8,7 +8,7 @@ interface SummaryCardsProps {
   targetNetWorth: number;
   averageSavingsRate: number;
   previousNetWorth?: number;
-  totalLoan?: number;
+  totalLoan?: number; // kept for prop compatibility, no longer displayed
 }
 
 interface CardProps {
@@ -80,7 +80,6 @@ export function SummaryCards({
   totalLoan = 0,
 }: SummaryCardsProps) {
   const [ref, isInView] = useInView<HTMLDivElement>({ threshold: 0.2 });
-  const hasLoan = totalLoan > 0;
 
   const cards = [
     {
@@ -100,27 +99,19 @@ export function SummaryCards({
       delay: 200,
       formatAsCurrency: true
     },
-    ...(hasLoan ? [{
-      title: '총 대출 잔액',
-      value: totalLoan,
-      icon: <CreditCard className="w-5 h-5 sm:w-6 sm:h-6 text-red-500" />,
-      color: 'from-red-400 to-red-600',
-      delay: 300,
-      formatAsCurrency: true
-    }] : []),
     {
       title: '평균 저축률',
       value: averageSavingsRate,
       suffix: '%',
       icon: <PiggyBank className="w-5 h-5 sm:w-6 sm:h-6 text-purple-500" />,
       color: 'from-purple-400 to-purple-600',
-      delay: hasLoan ? 400 : 300,
+      delay: 300,
       formatAsCurrency: false
     }
   ];
 
   return (
-    <div ref={ref} className={`grid gap-3 sm:gap-4 lg:gap-6 ${hasLoan ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-3'}`}>
+    <div ref={ref} className="grid grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
       {cards.map((card, index) => (
         <Card
           key={index}
