@@ -237,63 +237,68 @@ function App() {
   }, [stockPrices]);
 
   // AI 조언 & 챌린지 업데이트 (이전달 실제 데이터 활용)
+  // ⚠️ 디바운스 3초: transactions 추가/변경이 연속으로 일어나도 마지막 변경 후 3초 뒤 1번만 호출
   useEffect(() => {
-    const stockTotal = stocks.reduce((sum, s) => sum + (s.shares * s.currentPrice), 0);
-    const stockCost = stocks.reduce((sum, s) => sum + (s.shares * s.avgPrice), 0);
-    const stockReturn = stockCost > 0 ? ((stockTotal - stockCost) / stockCost) * 100 : 0;
+    const timer = setTimeout(() => {
+      const stockTotal = stocks.reduce((sum, s) => sum + (s.shares * s.currentPrice), 0);
+      const stockCost = stocks.reduce((sum, s) => sum + (s.shares * s.avgPrice), 0);
+      const stockReturn = stockCost > 0 ? ((stockTotal - stockCost) / stockCost) * 100 : 0;
 
-    const validMonths = yearlyData.monthlyData.filter(m => m.income > 0);
-    const monthlyIncome = validMonths.length > 0 ? validMonths.reduce((sum, m) => sum + m.income, 0) / validMonths.length : 0;
-    const monthlyExpense = validMonths.length > 0 ? validMonths.reduce((sum, m) => sum + m.expense, 0) / validMonths.length : 0;
+      const validMonths = yearlyData.monthlyData.filter(m => m.income > 0);
+      const monthlyIncome = validMonths.length > 0 ? validMonths.reduce((sum, m) => sum + m.income, 0) / validMonths.length : 0;
+      const monthlyExpense = validMonths.length > 0 ? validMonths.reduce((sum, m) => sum + m.expense, 0) / validMonths.length : 0;
 
-    // 이전달 데이터 추출 (현재 달 기준 -1)
-    const prevMonthIndex = currentMonth - 2; // 0-indexed
-    const prevMonthData = prevMonthIndex >= 0 ? yearlyData.monthlyData[prevMonthIndex] : null;
+      // 이전달 데이터 추출 (현재 달 기준 -1)
+      const prevMonthIndex = currentMonth - 2; // 0-indexed
+      const prevMonthData = prevMonthIndex >= 0 ? yearlyData.monthlyData[prevMonthIndex] : null;
 
-    // 이전달 카테고리별 지출 집계
-    const prevMonthTransactions = prevMonthData && prevMonthData.income > 0
-      ? transactions.filter(t => t.year === selectedYear && t.month === currentMonth - 1 && t.type === 'expense')
-      : [];
+      // 이전달 카테고리별 지출 집계
+      const prevMonthTransactions = prevMonthData && prevMonthData.income > 0
+        ? transactions.filter(t => t.year === selectedYear && t.month === currentMonth - 1 && t.type === 'expense')
+        : [];
 
-    const expenseByCategory = prevMonthTransactions.reduce<Record<string, number>>((acc, t) => {
-      acc[t.category] = (acc[t.category] || 0) + t.amount;
-      return acc;
-    }, {});
+      const expenseByCategory = prevMonthTransactions.reduce<Record<string, number>>((acc, t) => {
+        acc[t.category] = (acc[t.category] || 0) + t.amount;
+        return acc;
+      }, {});
 
-    const context: FinancialContext = {
-      currentNetWorth: yearlyData.currentNetWorth,
-      targetNetWorth: yearlyData.targetNetWorth,
-      progress: yearlyData.targetAmount > 0 ? (yearlyData.currentAmount / yearlyData.targetAmount) * 100 : 0,
-      streak: yearlyData.streak,
-      monthsLeft,
-      averageSavingsRate: yearlyData.averageSavingsRate,
-      monthlyIncome,
-      monthlyExpense,
-      stockReturn,
-      totalInvestment: stockCost,
-      coupleNames: [profile.partner1.name, profile.partner2.name],
-      previousMonthData: prevMonthData && prevMonthData.income > 0 ? {
-        income: prevMonthData.income,
-        expense: prevMonthData.expense,
-        savingsRate: prevMonthData.savingsRate,
-        expenseByCategory: Object.entries(expenseByCategory).map(([category, amount]) => ({ category, amount })),
-      } : undefined,
-    };
+      const context: FinancialContext = {
+        currentNetWorth: yearlyData.currentNetWorth,
+        targetNetWorth: yearlyData.targetNetWorth,
+        progress: yearlyData.targetAmount > 0 ? (yearlyData.currentAmount / yearlyData.targetAmount) * 100 : 0,
+        streak: yearlyData.streak,
+        monthsLeft,
+        averageSavingsRate: yearlyData.averageSavingsRate,
+        monthlyIncome,
+        monthlyExpense,
+        stockReturn,
+        totalInvestment: stockCost,
+        coupleNames: [profile.partner1.name, profile.partner2.name],
+        previousMonthData: prevMonthData && prevMonthData.income > 0 ? {
+          income: prevMonthData.income,
+          expense: prevMonthData.expense,
+          savingsRate: prevMonthData.savingsRate,
+          expenseByCategory: Object.entries(expenseByCategory).map(([category, amount]) => ({ category, amount })),
+        } : undefined,
+      };
 
-    getFinancialAdvice(context).then((advice) => {
-      setBotMessage({
-        id: 'ai-' + Date.now(),
-        type: advice.type,
-        message: advice.message,
-        emoji: advice.emoji,
+      getFinancialAdvice(context).then((advice) => {
+        setBotMessage({
+          id: 'ai-' + Date.now(),
+          type: advice.type,
+          message: advice.message,
+          emoji: advice.emoji,
+        });
       });
-    });
 
-    getMonthlyChallenge(context).then((challengeData) => {
-      if (challengeData) {
-        setMonthlyChallenge(challengeData);
-      }
-    });
+      getMonthlyChallenge(context).then((challengeData) => {
+        if (challengeData) {
+          setMonthlyChallenge(challengeData);
+        }
+      });
+    }, 3000); // 3초 디바운스: 연속 변경 시 마지막 변경 후 3초 뒤 1회만 실행
+
+    return () => clearTimeout(timer); // 새 변경이 오면 이전 타이머 취소
   }, [yearlyData, stocks, transactions, profile, monthsLeft, selectedYear, currentMonth]);
 
   const handleAddTransaction = useCallback((transaction: Omit<Transaction, 'id'>) => {
