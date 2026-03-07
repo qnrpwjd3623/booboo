@@ -76,7 +76,8 @@ export function ImageImportModal({
           _id: `draft-${Date.now()}-${i}`,
           included: true,
           category: item.category,
-          description: item.description,
+          // AI가 상호명을 못 찾으면 카테고리명을 그대로 넣는 경우가 있어서 제거
+          description: item.description === item.category ? '' : (item.description || ''),
           amount: item.amount,
           type: item.type,
           day: item.day ?? 1,
