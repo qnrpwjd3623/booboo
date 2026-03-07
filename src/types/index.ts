@@ -4,6 +4,14 @@ export type AssetCategory = 'stock' | 'cash' | 'pension' | 'debt' | 'irp' | 'isa
 // 거래 유형
 export type TransactionType = 'income' | 'expense';
 
+// 사용자 정의 카테고리
+export interface CustomCategory {
+  id: string;
+  name: string;
+  type: TransactionType;
+  icon?: string;
+}
+
 // 수입/지출 카테고리
 export interface TransactionCategory {
   id: string;

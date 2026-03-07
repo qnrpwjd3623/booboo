@@ -317,3 +317,76 @@ function getMockChallenge() {
     category: '식비'
   };
 }
+
+// ========== 개인 소비 캐릭터 코멘트 (부부 대화체) ==========
+
+export async function getPersonCharacterComment(
+  name: string,
+  income: number,
+  expense: number,
+  topCategories: Array<{ category: string; amount: number }>,
+  partnerName: string,
+): Promise<string> {
+  if (!GEMINI_API_KEY) {
+    return getPersonMockComment(name, income, expense, topCategories);
+  }
+
+  try {
+    const topCatList = topCategories
+      .slice(0, 3)
+      .map((c) => `${c.category} ${c.amount.toLocaleString()}원`)
+      .join(', ');
+    const savingsRate = income > 0 ? Math.round((income - expense) / income * 100) : 0;
+
+    const prompt = `이번 달 ${name}의 가계 현황이야:
+- 수입: ${income.toLocaleString()}원
+- 지출: ${expense.toLocaleString()}원
+- 저축률: ${savingsRate}%
+- 주요 지출: ${topCatList || '없음'}
+
+${name}이(가) 배우자 ${partnerName}에게 혹은 혼자 중얼거리듯 이번 달 본인 지출에 대해 짧게 한마디 해줘.
+부부끼리 편한 반말로, 실제 데이터를 자연스럽게 반영해서.
+예시: "나 이번달 배달 거의 안 먹음! 😤", "커피값 좀 썼다... ☕", "카드값 봤어? 나 이번달 잘 참았지?"
+
+반드시 아래 JSON 형식으로만 응답해:
+{"comment": "60자 이내의 짧은 한마디, 이모지 1-2개 포함"}
+`;
+
+    const systemInstruction = `너는 ${name}이야. 한국어 반말 부부 대화체로 짧고 자연스럽게 말해줘. 반드시 JSON 형식으로만 응답해.`;
+    const responseText = await callGeminiAPI(prompt, systemInstruction);
+
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed.comment) return parsed.comment;
+    }
+  } catch (error) {
+    console.error('Gemini API error (person comment):', error);
+  }
+
+  return getPersonMockComment(name, income, expense, topCategories);
+}
+
+function getPersonMockComment(
+  name: string,
+  income: number,
+  expense: number,
+  topCategories: Array<{ category: string; amount: number }>,
+): string {
+  const savingsRate = income > 0 ? ((income - expense) / income) * 100 : 0;
+  const topCat = topCategories[0]?.category;
+
+  if (income === 0 && expense === 0) {
+    return `${name} 이번달 기록이 없네... 입력해줘 😅`;
+  }
+  if (savingsRate >= 40) {
+    return `나 이번달 진짜 잘 참았지? 😤${topCat ? ` ${topCat} 빼고는!` : ''}`;
+  }
+  if (savingsRate >= 20) {
+    return `${topCat ? `${topCat}에 좀 썼는데...` : '지출이 좀 됐는데...'} 뭐 괜찮잖아? 😅`;
+  }
+  if (savingsRate < 0) {
+    return `이번달 좀 많이 썼다 반성... 😓${topCat ? ` ${topCat}이 문제야` : ''}`;
+  }
+  return `${topCat ? `${topCat} 항목이 은근 크더라 🤔` : '이번달 무난했어'} 다음달엔 더 아낄게 💪`;
+}

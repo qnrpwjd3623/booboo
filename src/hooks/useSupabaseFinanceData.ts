@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/services/supabaseClient';
-import type { Transaction, StockItem, FinancialProduct, LoanItem } from '@/types';
+import type { Transaction, StockItem, FinancialProduct, LoanItem, CustomCategory, TransactionType } from '@/types';
 
 // ========== DB ↔ App 타입 변환 ==========
 interface DbTransaction {
@@ -209,6 +209,7 @@ export function useSupabaseFinanceData() {
     const [stocks, setStocks] = useState<StockItem[]>([]);
     const [financialProducts, setFinancialProducts] = useState<FinancialProduct[]>([]);
     const [loans, setLoans] = useState<LoanItem[]>([]);
+    const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
     const [yearlySettings, setYearlySettings] = useState<Record<number, { targetNetWorth: number; startNetWorth: number; monthlyTargets?: Record<number, number> }>>({});
     const [isLoading, setIsLoading] = useState(true);
 
@@ -226,12 +227,31 @@ export function useSupabaseFinanceData() {
                 loadProducts(),
                 loadYearlySettings(),
                 loadLoans(),
+                loadCustomCategories(),
             ]);
         } catch (error) {
             console.error('Failed to load data:', error);
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const loadCustomCategories = async () => {
+        const { data, error } = await supabase.from('custom_categories').select('*').order('created_at', { ascending: true });
+        if (error) {
+            // 테이블이 없을 수 있으므로 조용히 처리
+            if (!error.message?.includes('does not exist') && error.code !== 'PGRST116') {
+                console.error('Load custom categories error:', error);
+            }
+            return;
+        }
+        const cats: CustomCategory[] = (data || []).map((row: { id: string; name: string; type: string; icon?: string }) => ({
+            id: row.id,
+            name: row.name,
+            type: row.type as TransactionType,
+            icon: row.icon || undefined,
+        }));
+        setCustomCategories(cats);
     };
 
     const loadTransactions = async () => {
@@ -572,6 +592,34 @@ export function useSupabaseFinanceData() {
         return loans.reduce((sum, l) => sum + l.monthlyPayment, 0);
     }, [loans]);
 
+    // ========== Custom Categories ==========
+    const addCustomCategory = useCallback(async (cat: Omit<CustomCategory, 'id'>): Promise<CustomCategory | undefined> => {
+        const { data, error } = await supabase
+            .from('custom_categories')
+            .insert({ name: cat.name, type: cat.type, icon: cat.icon || null })
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Add custom category error:', error);
+            // 테이블 없으면 로컬에만 추가 (임시)
+            const tempCat: CustomCategory = { id: 'temp-' + Date.now(), name: cat.name, type: cat.type, icon: cat.icon };
+            setCustomCategories(prev => [...prev, tempCat]);
+            return tempCat;
+        }
+        if (data) {
+            const newCat: CustomCategory = { id: data.id, name: data.name, type: data.type as TransactionType, icon: data.icon || undefined };
+            setCustomCategories(prev => [...prev, newCat]);
+            return newCat;
+        }
+    }, []);
+
+    const deleteCustomCategory = useCallback(async (id: string) => {
+        const { error } = await supabase.from('custom_categories').delete().eq('id', id);
+        if (error) { console.error('Delete custom category error:', error); return; }
+        setCustomCategories(prev => prev.filter(c => c.id !== id));
+    }, []);
+
     // ========== Yearly Settings ==========
     const updateYearlySettings = useCallback(async (year: number, settings: { targetNetWorth?: number; startNetWorth?: number }) => {
         const current = yearlySettings[year] || { targetNetWorth: 100000000, startNetWorth: 0 };
@@ -631,6 +679,7 @@ export function useSupabaseFinanceData() {
         stocks,
         financialProducts,
         loans,
+        customCategories,
         yearlySettings,
         isLoading,
 
@@ -670,6 +719,10 @@ export function useSupabaseFinanceData() {
         // Monthly targets
         updateMonthlyTarget,
         getMonthlyTargets,
+
+        // Custom category methods
+        addCustomCategory,
+        deleteCustomCategory,
 
         // Refresh
         refreshData: loadAllData,

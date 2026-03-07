@@ -7,7 +7,9 @@ import { MonthlyHeatmap } from '@/components/MonthlyHeatmap';
 import { BotCard } from '@/components/BotCard';
 import { StockPortfolio } from '@/components/StockPortfolio';
 import { YearSelector } from '@/components/YearSelector';
+import { MonthSelector } from '@/components/MonthSelector';
 import { TransactionForm } from '@/components/TransactionForm';
+import { MonthlyTransactionView } from '@/components/MonthlyTransactionView';
 import { StockForm } from '@/components/StockForm';
 import { FinancialProductForm } from '@/components/FinancialProductForm';
 import { LoanForm } from '@/components/LoanForm';
@@ -113,6 +115,7 @@ function App() {
   const { user, isLoading: authLoading, signIn, signOut } = useAuth();
 
   const [selectedYear, setSelectedYear] = useState(2025);
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isGoalOpen, setIsGoalOpen] = useState(false);
@@ -129,14 +132,18 @@ function App() {
   const [editingStock, setEditingStock] = useState<StockItem | null>(null);
   const [editingProduct, setEditingProduct] = useState<FinancialProduct | null>(null);
   const [editingLoan, setEditingLoan] = useState<LoanItem | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   const {
     transactions,
     stocks,
     financialProducts,
     loans,
+    customCategories,
     isLoading,
     addTransaction,
+    updateTransaction,
+    deleteTransaction,
     updateStock,
     deleteStock,
     addStock,
@@ -146,6 +153,7 @@ function App() {
     addLoan,
     updateLoan,
     deleteLoan,
+    addCustomCategory,
     getYearlySettings,
     updateYearlySettings,
     updateMonthlyTarget,
@@ -274,6 +282,15 @@ function App() {
   const handleAddTransaction = useCallback((transaction: Omit<Transaction, 'id'>) => {
     addTransaction(transaction);
   }, [addTransaction]);
+
+  const handleUpdateTransaction = useCallback((id: string, updates: Partial<Transaction>) => {
+    updateTransaction(id, updates);
+    setEditingTransaction(null);
+  }, [updateTransaction]);
+
+  const handleDeleteTransaction = useCallback((id: string) => {
+    deleteTransaction(id);
+  }, [deleteTransaction]);
 
   const handleAddStock = useCallback((stock: Omit<StockItem, 'id'>) => {
     addStock(stock);
@@ -411,7 +428,7 @@ function App() {
             </motion.div>
 
             {/* Desktop Actions */}
-            <div className="hidden md:flex items-center gap-4">
+            <div className="hidden md:flex items-center gap-3">
               <button
                 onClick={() => setIsGoalOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-700"
@@ -421,7 +438,14 @@ function App() {
               </button>
               <YearSelector
                 selectedYear={selectedYear}
-                onYearChange={setSelectedYear}
+                onYearChange={(year) => {
+                  setSelectedYear(year);
+                  setSelectedMonth(null);
+                }}
+              />
+              <MonthSelector
+                selectedMonth={selectedMonth}
+                onMonthChange={setSelectedMonth}
               />
               <button
                 onClick={signOut}
@@ -451,7 +475,7 @@ function App() {
               exit={{ opacity: 0, height: 0 }}
               className="md:hidden border-t border-gray-200 bg-white/80 backdrop-blur-xl"
             >
-              <div className="px-4 py-4 space-y-4">
+              <div className="px-4 py-4 space-y-3">
                 <button
                   onClick={() => {
                     setIsGoalOpen(true);
@@ -466,183 +490,245 @@ function App() {
                   selectedYear={selectedYear}
                   onYearChange={(year) => {
                     setSelectedYear(year);
+                    setSelectedMonth(null);
                     setIsMobileMenuOpen(false);
                   }}
                 />
+                <div className="overflow-x-auto">
+                  <MonthSelector
+                    selectedMonth={selectedMonth}
+                    onMonthChange={(month) => {
+                      setSelectedMonth(month);
+                      setIsMobileMenuOpen(false);
+                    }}
+                  />
+                </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {/* Welcome Message */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="mb-6 sm:mb-8"
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500" />
-            <span className="text-xs sm:text-sm font-medium text-orange-500">상위 15% 부부</span>
-          </div>
-          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">
-            {selectedYear}년, 함께 만드는 자산 🎯
-          </h2>
-          <p className="text-sm sm:text-base text-gray-500">
-            {profile.partner1.name}와 {profile.partner2.name}, 연속 {yearlyData.streak}개월 달성 중! 💪
-          </p>
-        </motion.div>
-
-        {/* Quick Actions */}
-        <div className="flex flex-wrap gap-2 sm:gap-3 mb-6 sm:mb-8">
-          <motion.button
-            onClick={() => setIsTransactionFormOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-700"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+      {/* Main Content — 월 선택 시: 월간뷰 / 아닐 때: 메인 대시보드 */}
+      <AnimatePresence mode="wait">
+        {selectedMonth !== null ? (
+          /* ── 월간 거래 관리 화면 ── */
+          <motion.div
+            key={`monthly-${selectedYear}-${selectedMonth}`}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -16 }}
+            transition={{ duration: 0.25 }}
           >
-            <Wallet className="w-4 h-4 text-green-500" />
-            <span className="hidden sm:inline">수입/지출 입력</span>
-            <span className="sm:hidden">거래입력</span>
-          </motion.button>
-          <motion.button
-            onClick={() => {
-              setEditingStock(null);
-              setIsStockFormOpen(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-700"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <TrendingUp className="w-4 h-4 text-blue-500" />
-            <span className="hidden sm:inline">주식 추가</span>
-            <span className="sm:hidden">주식</span>
-          </motion.button>
-          <motion.button
-            onClick={() => {
-              setEditingProduct(null);
-              setIsProductFormOpen(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-700"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <PiggyBank className="w-4 h-4 text-purple-500" />
-            <span className="hidden sm:inline">자산 추가</span>
-            <span className="sm:hidden">자산</span>
-          </motion.button>
-          <motion.button
-            onClick={() => {
-              setEditingLoan(null);
-              setIsLoanFormOpen(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-700"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <CreditCard className="w-4 h-4 text-red-500" />
-            <span className="hidden sm:inline">대출 추가</span>
-            <span className="sm:hidden">대출</span>
-          </motion.button>
-        </div>
-
-        {/* Summary Cards */}
-        <div className="mb-6 sm:mb-8">
-          <SummaryCards
-            currentNetWorth={yearlyData.currentNetWorth}
-            targetNetWorth={yearlyData.targetNetWorth}
-            averageSavingsRate={yearlyData.averageSavingsRate}
-            previousNetWorth={yearlyData.monthlyData.find(m => m.month === currentMonth - 1)?.netWorth}
-          />
-        </div>
-
-        {/* Main Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
-          <div className="lg:col-span-3">
-            <GoalProgress
-              currentAmount={yearlyData.currentAmount}
-              targetAmount={yearlyData.targetAmount}
-              streak={yearlyData.streak}
-              challenge={monthlyChallenge}
-              monthsLeft={monthsLeft}
+            <MonthlyTransactionView
+              year={selectedYear}
+              month={selectedMonth}
+              transactions={transactions}
+              customCategories={customCategories}
+              onBack={() => setSelectedMonth(null)}
+              onAddTransaction={() => {
+                setEditingTransaction(null);
+                setIsTransactionFormOpen(true);
+              }}
+              onEditTransaction={(txn) => {
+                setEditingTransaction(txn);
+                setIsTransactionFormOpen(true);
+              }}
+              onDeleteTransaction={handleDeleteTransaction}
+              partnerNames={[profile.partner1.name, profile.partner2.name]}
+              partnerEmojis={[profile.partner1.emoji || '👨', profile.partner2.emoji || '👩']}
             />
-          </div>
+          </motion.div>
+        ) : (
+          /* ── 메인 대시보드 ── */
+          <motion.main
+            key="dashboard"
+            className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -16 }}
+            transition={{ duration: 0.25 }}
+          >
+            {/* Welcome Message */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="mb-6 sm:mb-8"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500" />
+                <span className="text-xs sm:text-sm font-medium text-orange-500">상위 15% 부부</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">
+                {selectedYear}년, 함께 만드는 자산 🎯
+              </h2>
+              <p className="text-sm sm:text-base text-gray-500">
+                {profile.partner1.name}와 {profile.partner2.name}, 연속 {yearlyData.streak}개월 달성 중! 💪
+              </p>
+            </motion.div>
 
-          <div className="lg:col-span-5">
-            <NetWorthChart
-              monthlyData={yearlyData.monthlyData}
-              targetNetWorth={yearlyData.targetNetWorth}
-            />
-          </div>
+            {/* Quick Actions */}
+            <div className="flex flex-wrap gap-2 sm:gap-3 mb-6 sm:mb-8">
+              <motion.button
+                onClick={() => {
+                  setEditingTransaction(null);
+                  setIsTransactionFormOpen(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-700"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Wallet className="w-4 h-4 text-green-500" />
+                <span className="hidden sm:inline">수입/지출 입력</span>
+                <span className="sm:hidden">거래입력</span>
+              </motion.button>
+              <motion.button
+                onClick={() => {
+                  setEditingStock(null);
+                  setIsStockFormOpen(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-700"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <TrendingUp className="w-4 h-4 text-blue-500" />
+                <span className="hidden sm:inline">주식 추가</span>
+                <span className="sm:hidden">주식</span>
+              </motion.button>
+              <motion.button
+                onClick={() => {
+                  setEditingProduct(null);
+                  setIsProductFormOpen(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-700"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <PiggyBank className="w-4 h-4 text-purple-500" />
+                <span className="hidden sm:inline">자산 추가</span>
+                <span className="sm:hidden">자산</span>
+              </motion.button>
+              <motion.button
+                onClick={() => {
+                  setEditingLoan(null);
+                  setIsLoanFormOpen(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-700"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <CreditCard className="w-4 h-4 text-red-500" />
+                <span className="hidden sm:inline">대출 추가</span>
+                <span className="sm:hidden">대출</span>
+              </motion.button>
+            </div>
 
-          <div className="lg:col-span-4 space-y-4 sm:space-y-6">
-            <MonthlyHeatmap
-              monthlyData={yearlyData.monthlyData}
-              monthlyTargets={monthlyTargets}
-              onUpdateTarget={(month, target) => updateMonthlyTarget(selectedYear, month, target)}
-            />
-            {botMessage && (
-              <BotCard
-                messages={[botMessage]}
+            {/* Summary Cards */}
+            <div className="mb-6 sm:mb-8">
+              <SummaryCards
                 currentNetWorth={yearlyData.currentNetWorth}
                 targetNetWorth={yearlyData.targetNetWorth}
-                streak={yearlyData.streak}
+                averageSavingsRate={yearlyData.averageSavingsRate}
+                previousNetWorth={yearlyData.monthlyData.find(m => m.month === currentMonth - 1)?.netWorth}
               />
+            </div>
+
+            {/* Main Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
+              <div className="lg:col-span-3">
+                <GoalProgress
+                  currentAmount={yearlyData.currentAmount}
+                  targetAmount={yearlyData.targetAmount}
+                  streak={yearlyData.streak}
+                  challenge={monthlyChallenge}
+                  monthsLeft={monthsLeft}
+                />
+              </div>
+
+              <div className="lg:col-span-5">
+                <NetWorthChart
+                  monthlyData={yearlyData.monthlyData}
+                  targetNetWorth={yearlyData.targetNetWorth}
+                />
+              </div>
+
+              <div className="lg:col-span-4 space-y-4 sm:space-y-6">
+                <MonthlyHeatmap
+                  monthlyData={yearlyData.monthlyData}
+                  monthlyTargets={monthlyTargets}
+                  onUpdateTarget={(month, target) => updateMonthlyTarget(selectedYear, month, target)}
+                />
+                {botMessage && (
+                  <BotCard
+                    messages={[botMessage]}
+                    currentNetWorth={yearlyData.currentNetWorth}
+                    targetNetWorth={yearlyData.targetNetWorth}
+                    streak={yearlyData.streak}
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Stock Portfolio */}
+            <div className="mt-6 sm:mt-8">
+              <StockPortfolio
+                stocks={stocks}
+                onEdit={openStockEdit}
+                onDelete={handleDeleteStock}
+              />
+            </div>
+
+            {/* Financial Products */}
+            {financialProducts.length > 0 && (
+              <div className="mt-6 sm:mt-8">
+                <FinancialProductsList
+                  products={financialProducts}
+                  onEdit={openProductEdit}
+                  onDelete={handleDeleteProduct}
+                />
+              </div>
             )}
-          </div>
-        </div>
 
-        {/* Stock Portfolio */}
-        <div className="mt-6 sm:mt-8">
-          <StockPortfolio
-            stocks={stocks}
-            onEdit={openStockEdit}
-            onDelete={handleDeleteStock}
-          />
-        </div>
-
-        {/* Financial Products */}
-        {financialProducts.length > 0 && (
-          <div className="mt-6 sm:mt-8">
-            <FinancialProductsList
-              products={financialProducts}
-              onEdit={openProductEdit}
-              onDelete={handleDeleteProduct}
-            />
-          </div>
+            {/* 대출 현황 */}
+            {loans.length > 0 && (
+              <div className="mt-6 sm:mt-8">
+                <LoanList
+                  loans={loans}
+                  onEdit={openLoanEdit}
+                  onDelete={handleDeleteLoan}
+                />
+              </div>
+            )}
+          </motion.main>
         )}
+      </AnimatePresence>
 
-        {/* 대출 현황 */}
-        {loans.length > 0 && (
-          <div className="mt-6 sm:mt-8">
-            <LoanList
-              loans={loans}
-              onEdit={openLoanEdit}
-              onDelete={handleDeleteLoan}
-            />
+      {/* Footer (메인 대시보드에서만) */}
+      {selectedMonth === null && (
+        <footer className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 mt-8">
+          <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
+            <Heart className="w-4 h-4 text-red-400" />
+            <span>{profile.coupleName} - 똑똑한 자산 관리</span>
           </div>
-        )}
-      </main>
-
-      {/* Footer */}
-      <footer className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 mt-8">
-        <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
-          <Heart className="w-4 h-4 text-red-400" />
-          <span>{profile.coupleName} - 똑똑한 자산 관리</span>
-        </div>
-      </footer>
+        </footer>
+      )}
 
       {/* Forms */}
       <TransactionForm
         year={selectedYear}
-        month={currentMonth}
+        month={selectedMonth ?? currentMonth}
         onAdd={handleAddTransaction}
-        onClose={() => setIsTransactionFormOpen(false)}
+        onUpdate={handleUpdateTransaction}
+        onClose={() => {
+          setIsTransactionFormOpen(false);
+          setEditingTransaction(null);
+        }}
         isOpen={isTransactionFormOpen}
         partnerNames={[profile.partner1.name, profile.partner2.name]}
+        editTransaction={editingTransaction}
+        customCategories={customCategories}
+        onAddCustomCategory={addCustomCategory}
       />
 
       <StockForm
