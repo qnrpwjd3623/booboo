@@ -362,6 +362,23 @@ function DraftItem({
   const ownerOptions = [partnerNames[0], partnerNames[1], 'shared'];
   const ownerLabel = draft.owner === 'shared' ? '공동' : draft.owner;
 
+  // 금액 표시: 평상시엔 콤마 포맷, 수정 중엔 숫자만
+  const [amountDisplay, setAmountDisplay] = useState(
+    draft.amount > 0 ? draft.amount.toLocaleString('ko-KR') : ''
+  );
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/[^0-9]/g, ''); // 숫자만 허용
+    setAmountDisplay(raw); // 입력 중엔 raw 값 유지 (커서 점프 방지)
+    onChange({ amount: raw === '' ? 0 : parseInt(raw, 10) });
+  };
+
+  const handleAmountBlur = () => {
+    // 포커스 해제 시 콤마 포맷 적용
+    const num = parseInt(amountDisplay.replace(/[^0-9]/g, '') || '0', 10);
+    setAmountDisplay(num > 0 ? num.toLocaleString('ko-KR') : '');
+  };
+
   return (
     <div
       className={`rounded-2xl p-3.5 border transition-all ${
@@ -396,12 +413,14 @@ function DraftItem({
           ))}
         </select>
 
-        {/* 금액 */}
+        {/* 금액 — 콤마 포맷 */}
         <input
-          type="number"
-          value={draft.amount}
-          onChange={(e) => onChange({ amount: Number(e.target.value) })}
-          className="w-24 text-xs text-right font-bold text-gray-900 bg-gray-50 rounded-lg px-2 py-1.5 border-0 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+          type="text"
+          inputMode="numeric"
+          value={amountDisplay}
+          onChange={handleAmountChange}
+          onBlur={handleAmountBlur}
+          className="w-28 text-xs text-right font-bold text-gray-900 bg-gray-50 rounded-lg px-2 py-1.5 border-0 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
         />
 
         {/* 지출/수입 토글 */}
