@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, Pencil, Trash2, Search, TrendingUp, TrendingDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, Search, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, ImagePlus } from 'lucide-react';
 import type { Transaction, CustomCategory } from '@/types';
 import { getCategoryIcon } from '@/constants/categories';
 import { PersonSpendingCard } from './PersonSpendingCard';
+import { ImageImportModal } from './ImageImportModal';
 
 interface MonthlyTransactionViewProps {
   year: number;
@@ -15,6 +16,7 @@ interface MonthlyTransactionViewProps {
   onAddTransaction: () => void;
   onEditTransaction: (transaction: Transaction) => void;
   onDeleteTransaction: (id: string) => void;
+  onBatchAddTransactions: (txns: Omit<Transaction, 'id'>[]) => Promise<void>;
   partnerNames: [string, string];
   partnerEmojis: [string, string];
 }
@@ -33,11 +35,14 @@ export function MonthlyTransactionView({
   onAddTransaction,
   onEditTransaction,
   onDeleteTransaction,
+  onBatchAddTransactions,
   partnerNames,
   partnerEmojis,
+  customCategories,
 }: MonthlyTransactionViewProps) {
   const [filterOwner, setFilterOwner] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isImageImportOpen, setIsImageImportOpen] = useState(false);
 
   // 이 달 트랜잭션만
   const monthTxns = transactions.filter((t) => t.year === year && t.month === month);
@@ -123,16 +128,39 @@ export function MonthlyTransactionView({
             </button>
           </div>
 
-          {/* 거래 추가 */}
-          <button
-            onClick={onAddTransaction}
-            className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 text-white rounded-xl font-semibold text-sm shadow-sm hover:bg-orange-600 active:scale-95 transition-all flex-shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            거래 추가
-          </button>
+          {/* 우측 버튼 그룹 */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* 이미지로 가져오기 */}
+            <button
+              onClick={() => setIsImageImportOpen(true)}
+              title="이미지로 가져오기"
+              className="w-9 h-9 flex items-center justify-center rounded-xl bg-white shadow-sm hover:shadow-md hover:bg-orange-50 hover:text-orange-500 text-gray-500 transition-all"
+            >
+              <ImagePlus className="w-4 h-4" />
+            </button>
+
+            {/* 거래 추가 */}
+            <button
+              onClick={onAddTransaction}
+              className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 text-white rounded-xl font-semibold text-sm shadow-sm hover:bg-orange-600 active:scale-95 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              거래 추가
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* 이미지 가져오기 모달 */}
+      <ImageImportModal
+        isOpen={isImageImportOpen}
+        onClose={() => setIsImageImportOpen(false)}
+        year={year}
+        month={month}
+        partnerNames={partnerNames}
+        customCategories={customCategories}
+        onImport={onBatchAddTransactions}
+      />
 
       <div className="max-w-[1200px] mx-auto px-4 py-6 space-y-5">
         {/* 이달 요약 카드 */}

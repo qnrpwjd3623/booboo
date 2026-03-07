@@ -158,6 +158,7 @@ function App() {
     customCategories,
     isLoading,
     addTransaction,
+    addTransactions,
     updateTransaction,
     deleteTransaction,
     updateStock,
@@ -307,6 +308,10 @@ function App() {
   const handleDeleteTransaction = useCallback((id: string) => {
     deleteTransaction(id);
   }, [deleteTransaction]);
+
+  const handleBatchAddTransactions = useCallback(async (txns: Omit<Transaction, 'id'>[]) => {
+    await addTransactions(txns);
+  }, [addTransactions]);
 
   const handleAddStock = useCallback((stock: Omit<StockItem, 'id'>) => {
     addStock(stock);
@@ -560,6 +565,7 @@ function App() {
                 setIsTransactionFormOpen(true);
               }}
               onDeleteTransaction={handleDeleteTransaction}
+              onBatchAddTransactions={handleBatchAddTransactions}
               partnerNames={[profile.partner1.name, profile.partner2.name]}
               partnerEmojis={[profile.partner1.emoji || '👨', profile.partner2.emoji || '👩']}
             />

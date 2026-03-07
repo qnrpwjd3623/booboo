@@ -302,6 +302,28 @@ export function useSupabaseFinanceData() {
     };
 
     // ========== Transactions ==========
+    const addTransactions = useCallback(async (txns: Omit<Transaction, 'id'>[]): Promise<Transaction[]> => {
+        if (txns.length === 0) return [];
+        const rows = txns.map(t => ({
+            date: t.date,
+            year: t.year,
+            month: t.month,
+            type: t.type,
+            category: t.category,
+            description: t.description,
+            amount: t.amount,
+            owner: t.owner || 'shared',
+        }));
+        const { data, error } = await supabase
+            .from('transactions')
+            .insert(rows)
+            .select();
+        if (error) { console.error('Batch add transactions error:', error); return []; }
+        const newTxns = (data || []).map(toAppTransaction);
+        setTransactions(prev => [...newTxns, ...prev]);
+        return newTxns;
+    }, []);
+
     const addTransaction = useCallback(async (transaction: Omit<Transaction, 'id'>) => {
         const { data, error } = await supabase
             .from('transactions')
@@ -685,6 +707,7 @@ export function useSupabaseFinanceData() {
 
         // Transaction methods
         addTransaction,
+        addTransactions,
         updateTransaction,
         deleteTransaction,
         getTransactionsByMonth,

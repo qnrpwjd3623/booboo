@@ -318,6 +318,89 @@ function getMockChallenge() {
   };
 }
 
+// ========== 이미지 소비내역 파싱 (Gemini Vision) ==========
+
+export interface ParsedTxnItem {
+  category: string;
+  description: string;
+  amount: number;
+  type: 'income' | 'expense';
+  day: number | null;
+}
+
+export async function parseSpendingScreenshot(
+  base64Image: string,
+  mimeType: string,
+  year: number,
+  month: number,
+): Promise<ParsedTxnItem[]> {
+  if (!GEMINI_API_KEY) throw new Error('Gemini API key not set');
+
+  const expenseCats = '생활, 쇼핑, 자동차비, 외식비, 여행/숙박, 대중교통, 문화/여가, 의료/건강, 카페, 구독료, 주거/통신, 교육, 육아, 경조사, 식비/집밥';
+  const incomeCats = '급여, 부업/프리랜서, 투자수익, 용돈, 상여금, 기타';
+
+  const prompt = `이 이미지는 ${year}년 ${month}월 가계부/소비내역 스크린샷이야.
+이미지에서 거래 내역을 모두 읽어서 JSON으로 파싱해줘.
+
+사용 가능한 카테고리:
+- 지출(expense): ${expenseCats}
+- 수입(income): ${incomeCats}
+
+규칙:
+1. 각 거래를 가장 적합한 카테고리에 매핑해줘
+2. amount는 숫자만 (원/₩/콤마 제거)
+3. day는 해당 거래의 날짜(일)만 추출, 없으면 null
+4. description은 이미지에서 읽은 상호명/내역 그대로
+
+반드시 아래 JSON 형식으로만 응답해:
+{
+  "transactions": [
+    {
+      "category": "카테고리명",
+      "description": "상호명 또는 내역",
+      "amount": 숫자,
+      "type": "expense 또는 income",
+      "day": 숫자 또는 null
+    }
+  ]
+}`;
+
+  const body = {
+    contents: [{
+      parts: [
+        { inline_data: { mime_type: mimeType, data: base64Image } },
+        { text: prompt },
+      ],
+    }],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 4096,
+      responseMimeType: 'application/json',
+    },
+  };
+
+  const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Gemini Vision API error: ${response.status} ${err}`);
+  }
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('Empty response from Gemini Vision');
+
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('No JSON in response');
+
+  const parsed = JSON.parse(jsonMatch[0]);
+  return (parsed.transactions || []) as ParsedTxnItem[];
+}
+
 // ========== 개인 소비 캐릭터 코멘트 (부부 대화체) ==========
 
 export async function getPersonCharacterComment(
