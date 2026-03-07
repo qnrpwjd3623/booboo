@@ -365,17 +365,23 @@ export async function parseSpendingScreenshot(
   ]
 }`;
 
+  // Use camelCase per Google REST API spec for multimodal requests
   const body = {
     contents: [{
       parts: [
-        { inline_data: { mime_type: mimeType, data: base64Image } },
+        {
+          inlineData: {
+            mimeType: mimeType,
+            data: base64Image,
+          },
+        },
         { text: prompt },
       ],
     }],
     generationConfig: {
       temperature: 0.1,
       maxOutputTokens: 4096,
-      // Note: responseMimeType: 'application/json' is NOT supported for multimodal/vision requests
+      // Note: responseMimeType NOT used here — not supported for multimodal requests
     },
   };
 
@@ -386,20 +392,31 @@ export async function parseSpendingScreenshot(
   });
 
   if (!response.ok) {
-    const err = await response.text();
-    console.error('Gemini Vision API raw error:', err);
-    throw new Error(`Gemini Vision API error: ${response.status} ${err}`);
+    const errText = await response.text();
+    console.error('Gemini Vision API raw error:', errText);
+    let errMsg = `API ${response.status}`;
+    try {
+      const errJson = JSON.parse(errText);
+      errMsg = errJson?.error?.message || errMsg;
+    } catch { /* ignore */ }
+    throw new Error(errMsg);
   }
 
   const data = await response.json();
-  console.log('Gemini Vision raw response:', JSON.stringify(data).slice(0, 500));
+  console.log('Gemini Vision raw response:', JSON.stringify(data).slice(0, 800));
+
+  // Check for blocked content
+  const finishReason = data.candidates?.[0]?.finishReason;
+  if (finishReason && finishReason !== 'STOP') {
+    throw new Error(`응답 차단됨 (${finishReason}). 다른 이미지를 시도해주세요.`);
+  }
 
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Empty response from Gemini Vision');
+  if (!text) throw new Error('Gemini 응답이 비어있어요. API 키를 확인해주세요.');
 
-  // Extract JSON from the text response (model may wrap in markdown code blocks)
+  // Extract JSON — model may wrap in markdown code fences
   const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('No JSON found in response');
+  if (!jsonMatch) throw new Error(`JSON 파싱 실패. 응답: ${text.slice(0, 100)}`);
 
   const parsed = JSON.parse(jsonMatch[0]);
   return (parsed.transactions || []) as ParsedTxnItem[];

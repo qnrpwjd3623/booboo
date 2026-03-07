@@ -85,8 +85,9 @@ export function ImageImportModal({
       );
       setStep('review');
     } catch (err) {
-      console.error(err);
-      setError('이미지 분석에 실패했어요. 다시 시도해주세요.');
+      console.error('Image analysis error:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(`분석 실패: ${msg}`);
       setStep('upload');
     }
   }, [year, month, partnerNames]);
