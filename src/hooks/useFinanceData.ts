@@ -6,6 +6,7 @@ const initialData: AppData = {
   transactions: [],
   stocks: [],
   financialProducts: [],
+  loans: [],
   yearlySettings: {
     2024: { targetNetWorth: 130000000, startNetWorth: 85000000 },
     2025: { targetNetWorth: 200000000, startNetWorth: 125000000 },

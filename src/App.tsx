@@ -10,6 +10,8 @@ import { YearSelector } from '@/components/YearSelector';
 import { TransactionForm } from '@/components/TransactionForm';
 import { StockForm } from '@/components/StockForm';
 import { FinancialProductForm } from '@/components/FinancialProductForm';
+import { LoanForm } from '@/components/LoanForm';
+import { LoanList } from '@/components/LoanList';
 import { GoalSettingForm } from '@/components/GoalSettingForm';
 import { CoupleProfileSettings, type CoupleProfile } from '@/components/CoupleProfile';
 import { LoginPage } from '@/components/LoginPage';
@@ -18,8 +20,8 @@ import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchMultipleStockPrices, startStockPriceAutoUpdate } from '@/services/stockApi';
 import { getFinancialAdvice, getMonthlyChallenge, type FinancialContext } from '@/services/aiApi';
-import { Heart, Sparkles, Wallet, TrendingUp, PiggyBank, Menu, X, Settings, Target, Loader2, LogOut } from 'lucide-react';
-import type { Transaction, StockItem, FinancialProduct, BotMessage, Challenge } from '@/types';
+import { Heart, Sparkles, Wallet, TrendingUp, PiggyBank, CreditCard, Menu, X, Settings, Target, Loader2, LogOut } from 'lucide-react';
+import type { Transaction, StockItem, FinancialProduct, LoanItem, BotMessage, Challenge } from '@/types';
 
 // Generate yearly data from stored data
 function generateYearlyData(
@@ -123,13 +125,16 @@ function App() {
   const [isTransactionFormOpen, setIsTransactionFormOpen] = useState(false);
   const [isStockFormOpen, setIsStockFormOpen] = useState(false);
   const [isProductFormOpen, setIsProductFormOpen] = useState(false);
+  const [isLoanFormOpen, setIsLoanFormOpen] = useState(false);
   const [editingStock, setEditingStock] = useState<StockItem | null>(null);
   const [editingProduct, setEditingProduct] = useState<FinancialProduct | null>(null);
+  const [editingLoan, setEditingLoan] = useState<LoanItem | null>(null);
 
   const {
     transactions,
     stocks,
     financialProducts,
+    loans,
     isLoading,
     addTransaction,
     updateStock,
@@ -138,6 +143,9 @@ function App() {
     addFinancialProduct,
     updateFinancialProduct,
     deleteFinancialProduct,
+    addLoan,
+    updateLoan,
+    deleteLoan,
     getYearlySettings,
     updateYearlySettings,
     updateMonthlyTarget,
@@ -296,6 +304,26 @@ function App() {
       deleteFinancialProduct(id);
     }
   }, [deleteFinancialProduct]);
+
+  const handleAddLoan = useCallback((loan: Omit<LoanItem, 'id'>) => {
+    addLoan(loan);
+  }, [addLoan]);
+
+  const handleUpdateLoan = useCallback((id: string, updates: Partial<LoanItem>) => {
+    updateLoan(id, updates);
+    setEditingLoan(null);
+  }, [updateLoan]);
+
+  const handleDeleteLoan = useCallback((id: string) => {
+    if (confirm('정말 삭제하시겠습니까?')) {
+      deleteLoan(id);
+    }
+  }, [deleteLoan]);
+
+  const openLoanEdit = (loan: LoanItem) => {
+    setEditingLoan(loan);
+    setIsLoanFormOpen(true);
+  };
 
   const handleSaveGoal = useCallback((target: number) => {
     updateYearlySettings(selectedYear, { targetNetWorth: target });
@@ -503,8 +531,21 @@ function App() {
             whileTap={{ scale: 0.98 }}
           >
             <PiggyBank className="w-4 h-4 text-purple-500" />
-            <span className="hidden sm:inline">상품 추가</span>
-            <span className="sm:hidden">상품</span>
+            <span className="hidden sm:inline">자산 추가</span>
+            <span className="sm:hidden">자산</span>
+          </motion.button>
+          <motion.button
+            onClick={() => {
+              setEditingLoan(null);
+              setIsLoanFormOpen(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-700"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <CreditCard className="w-4 h-4 text-red-500" />
+            <span className="hidden sm:inline">대출 추가</span>
+            <span className="sm:hidden">대출</span>
           </motion.button>
         </div>
 
@@ -573,6 +614,17 @@ function App() {
             />
           </div>
         )}
+
+        {/* 대출 현황 */}
+        {loans.length > 0 && (
+          <div className="mt-6 sm:mt-8">
+            <LoanList
+              loans={loans}
+              onEdit={openLoanEdit}
+              onDelete={handleDeleteLoan}
+            />
+          </div>
+        )}
       </main>
 
       {/* Footer */}
@@ -617,6 +669,18 @@ function App() {
         partnerNames={[profile.partner1.name, profile.partner2.name]}
       />
 
+      <LoanForm
+        onAdd={handleAddLoan}
+        onUpdate={handleUpdateLoan}
+        onClose={() => {
+          setIsLoanFormOpen(false);
+          setEditingLoan(null);
+        }}
+        isOpen={isLoanFormOpen}
+        editLoan={editingLoan}
+        partnerNames={[profile.partner1.name, profile.partner2.name]}
+      />
+
       <GoalSettingForm
         isOpen={isGoalOpen}
         onClose={() => setIsGoalOpen(false)}
@@ -651,6 +715,7 @@ function FinancialProductsList({
     fund: '펀드',
     deposit: '예금',
     savings: '적금',
+    realestate: '부동산',
   };
 
   const typeColors: Record<string, string> = {
@@ -660,6 +725,7 @@ function FinancialProductsList({
     fund: 'bg-orange-100 text-orange-600',
     deposit: 'bg-cyan-100 text-cyan-600',
     savings: 'bg-pink-100 text-pink-600',
+    realestate: 'bg-amber-100 text-amber-600',
   };
 
   const totalPrincipal = products.reduce((sum, p) => sum + p.principal, 0);
@@ -679,7 +745,7 @@ function FinancialProductsList({
             <PiggyBank className="w-4 h-4 sm:w-5 sm:h-5 text-purple-500" />
           </div>
           <div>
-            <h3 className="text-base sm:text-lg font-semibold text-gray-900">금융상품</h3>
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900">자산 & 금융상품</h3>
             <p className="text-xs sm:text-sm text-gray-500">{products.length}개 상품</p>
           </div>
         </div>

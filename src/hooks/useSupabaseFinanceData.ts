@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/services/supabaseClient';
-import type { Transaction, StockItem, FinancialProduct } from '@/types';
+import type { Transaction, StockItem, FinancialProduct, LoanItem } from '@/types';
 
 // ========== DB ↔ App 타입 변환 ==========
 interface DbTransaction {
@@ -48,6 +48,53 @@ interface DbYearlySetting {
     monthly_targets: Record<number, number>;
 }
 
+interface DbLoan {
+    id: string;
+    name: string;
+    bank: string;
+    loan_type: string;
+    principal: number;
+    remaining_principal: number;
+    interest_rate: number;
+    monthly_payment: number;
+    start_date: string | null;
+    end_date: string | null;
+    total_months: number;
+    owner: string;
+    memo: string | null;
+}
+
+// ---- FinancialProduct memo 인코딩/디코딩 ----
+// 유형별 확장 필드를 memo 필드에 JSON으로 인코딩
+// 형식: {"__ext": {...extFields}, "__memo": "사용자 메모"}
+
+interface ProductExtFields {
+    interestRate?: number;
+    monthlyPayment?: number;
+    paidMonths?: number;
+    totalMonths?: number;
+    address?: string;
+}
+
+function encodeProductMemo(userMemo: string | undefined, ext: ProductExtFields): string {
+    const hasExt = Object.values(ext).some(v => v !== undefined);
+    if (!hasExt) return userMemo || '';
+    return JSON.stringify({ __ext: ext, __memo: userMemo || '' });
+}
+
+function decodeProductMemo(memoStr: string | null): { memo: string; ext: ProductExtFields } {
+    if (!memoStr) return { memo: '', ext: {} };
+    try {
+        const parsed = JSON.parse(memoStr);
+        if (parsed.__ext) {
+            return { memo: parsed.__memo || '', ext: parsed.__ext as ProductExtFields };
+        }
+    } catch {
+        // plain text memo
+    }
+    return { memo: memoStr, ext: {} };
+}
+
 function toAppTransaction(db: DbTransaction): Transaction {
     return {
         id: db.id,
@@ -76,6 +123,7 @@ function toAppStock(db: DbStock): StockItem {
 }
 
 function toAppProduct(db: DbProduct): FinancialProduct {
+    const { memo, ext } = decodeProductMemo(db.memo);
     return {
         id: db.id,
         type: db.type as FinancialProduct['type'],
@@ -84,10 +132,34 @@ function toAppProduct(db: DbProduct): FinancialProduct {
         principal: db.principal,
         currentValue: db.current_value,
         returnRate: db.return_rate,
-        memo: db.memo,
+        memo,
         startDate: db.start_date || undefined,
         maturityDate: db.maturity_date || undefined,
         owner: db.owner || 'shared',
+        // 확장 필드
+        interestRate: ext.interestRate,
+        monthlyPayment: ext.monthlyPayment,
+        paidMonths: ext.paidMonths,
+        totalMonths: ext.totalMonths,
+        address: ext.address,
+    };
+}
+
+function toAppLoan(db: DbLoan): LoanItem {
+    return {
+        id: db.id,
+        name: db.name,
+        bank: db.bank,
+        loanType: db.loan_type as 'equal_payment' | 'equal_principal',
+        principal: db.principal,
+        remainingPrincipal: db.remaining_principal,
+        interestRate: db.interest_rate,
+        monthlyPayment: db.monthly_payment,
+        startDate: db.start_date || '',
+        endDate: db.end_date || '',
+        totalMonths: db.total_months,
+        owner: db.owner || 'shared',
+        memo: db.memo || undefined,
     };
 }
 
@@ -96,6 +168,7 @@ export function useSupabaseFinanceData() {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [stocks, setStocks] = useState<StockItem[]>([]);
     const [financialProducts, setFinancialProducts] = useState<FinancialProduct[]>([]);
+    const [loans, setLoans] = useState<LoanItem[]>([]);
     const [yearlySettings, setYearlySettings] = useState<Record<number, { targetNetWorth: number; startNetWorth: number; monthlyTargets?: Record<number, number> }>>({});
     const [isLoading, setIsLoading] = useState(true);
 
@@ -112,6 +185,7 @@ export function useSupabaseFinanceData() {
                 loadStocks(),
                 loadProducts(),
                 loadYearlySettings(),
+                loadLoans(),
             ]);
         } catch (error) {
             console.error('Failed to load data:', error);
@@ -153,6 +227,18 @@ export function useSupabaseFinanceData() {
             };
         });
         setYearlySettings(settings);
+    };
+
+    const loadLoans = async () => {
+        const { data, error } = await supabase.from('loans').select('*');
+        if (error) {
+            // loans 테이블이 아직 없을 수 있음 - 조용히 처리
+            if (error.code !== 'PGRST116' && !error.message?.includes('does not exist')) {
+                console.error('Load loans error:', error);
+            }
+            return;
+        }
+        setLoans((data || []).map(toAppLoan));
     };
 
     // ========== Transactions ==========
@@ -273,6 +359,16 @@ export function useSupabaseFinanceData() {
 
     // ========== Financial Products ==========
     const addFinancialProduct = useCallback(async (product: Omit<FinancialProduct, 'id'>) => {
+        // 확장 필드를 memo에 인코딩
+        const ext: ProductExtFields = {
+            interestRate: product.interestRate,
+            monthlyPayment: product.monthlyPayment,
+            paidMonths: product.paidMonths,
+            totalMonths: product.totalMonths,
+            address: product.address,
+        };
+        const memoStr = encodeProductMemo(product.memo, ext);
+
         const { data, error } = await supabase
             .from('financial_products')
             .insert({
@@ -282,7 +378,7 @@ export function useSupabaseFinanceData() {
                 principal: product.principal,
                 current_value: product.currentValue,
                 return_rate: product.returnRate,
-                memo: product.memo || '',
+                memo: memoStr,
                 start_date: product.startDate || null,
                 maturity_date: product.maturityDate || null,
                 owner: product.owner || 'shared',
@@ -306,10 +402,28 @@ export function useSupabaseFinanceData() {
         if (updates.principal !== undefined) dbUpdates.principal = updates.principal;
         if (updates.currentValue !== undefined) dbUpdates.current_value = updates.currentValue;
         if (updates.returnRate !== undefined) dbUpdates.return_rate = updates.returnRate;
-        if (updates.memo !== undefined) dbUpdates.memo = updates.memo;
         if (updates.startDate !== undefined) dbUpdates.start_date = updates.startDate;
         if (updates.maturityDate !== undefined) dbUpdates.maturity_date = updates.maturityDate;
         if (updates.owner !== undefined) dbUpdates.owner = updates.owner;
+
+        // memo 업데이트 시 확장 필드도 인코딩
+        if (
+            updates.memo !== undefined ||
+            updates.interestRate !== undefined ||
+            updates.monthlyPayment !== undefined ||
+            updates.paidMonths !== undefined ||
+            updates.totalMonths !== undefined ||
+            updates.address !== undefined
+        ) {
+            const ext: ProductExtFields = {
+                interestRate: updates.interestRate,
+                monthlyPayment: updates.monthlyPayment,
+                paidMonths: updates.paidMonths,
+                totalMonths: updates.totalMonths,
+                address: updates.address,
+            };
+            dbUpdates.memo = encodeProductMemo(updates.memo, ext);
+        }
 
         const { error } = await supabase.from('financial_products').update(dbUpdates).eq('id', id);
         if (error) { console.error('Update product error:', error); return; }
@@ -338,6 +452,69 @@ export function useSupabaseFinanceData() {
             rate: totalPrincipal > 0 ? ((totalValue - totalPrincipal) / totalPrincipal) * 100 : 0,
         };
     }, [financialProducts, getTotalProductValue]);
+
+    // ========== Loans ==========
+    const addLoan = useCallback(async (loan: Omit<LoanItem, 'id'>) => {
+        const { data, error } = await supabase
+            .from('loans')
+            .insert({
+                name: loan.name,
+                bank: loan.bank,
+                loan_type: loan.loanType,
+                principal: loan.principal,
+                remaining_principal: loan.remainingPrincipal,
+                interest_rate: loan.interestRate,
+                monthly_payment: loan.monthlyPayment,
+                start_date: loan.startDate || null,
+                end_date: loan.endDate || null,
+                total_months: loan.totalMonths,
+                owner: loan.owner || 'shared',
+                memo: loan.memo || '',
+            })
+            .select()
+            .single();
+
+        if (error) { console.error('Add loan error:', error); return; }
+        if (data) {
+            const newLoan = toAppLoan(data);
+            setLoans(prev => [...prev, newLoan]);
+            return newLoan;
+        }
+    }, []);
+
+    const updateLoan = useCallback(async (id: string, updates: Partial<LoanItem>) => {
+        const dbUpdates: Record<string, unknown> = {};
+        if (updates.name !== undefined) dbUpdates.name = updates.name;
+        if (updates.bank !== undefined) dbUpdates.bank = updates.bank;
+        if (updates.loanType !== undefined) dbUpdates.loan_type = updates.loanType;
+        if (updates.principal !== undefined) dbUpdates.principal = updates.principal;
+        if (updates.remainingPrincipal !== undefined) dbUpdates.remaining_principal = updates.remainingPrincipal;
+        if (updates.interestRate !== undefined) dbUpdates.interest_rate = updates.interestRate;
+        if (updates.monthlyPayment !== undefined) dbUpdates.monthly_payment = updates.monthlyPayment;
+        if (updates.startDate !== undefined) dbUpdates.start_date = updates.startDate || null;
+        if (updates.endDate !== undefined) dbUpdates.end_date = updates.endDate || null;
+        if (updates.totalMonths !== undefined) dbUpdates.total_months = updates.totalMonths;
+        if (updates.owner !== undefined) dbUpdates.owner = updates.owner;
+        if (updates.memo !== undefined) dbUpdates.memo = updates.memo || '';
+
+        const { error } = await supabase.from('loans').update(dbUpdates).eq('id', id);
+        if (error) { console.error('Update loan error:', error); return; }
+        setLoans(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l));
+    }, []);
+
+    const deleteLoan = useCallback(async (id: string) => {
+        const { error } = await supabase.from('loans').delete().eq('id', id);
+        if (error) { console.error('Delete loan error:', error); return; }
+        setLoans(prev => prev.filter(l => l.id !== id));
+    }, []);
+
+    const getTotalLoanRemaining = useMemo(() => {
+        return loans.reduce((sum, l) => sum + l.remainingPrincipal, 0);
+    }, [loans]);
+
+    const getTotalMonthlyPayment = useMemo(() => {
+        return loans.reduce((sum, l) => sum + l.monthlyPayment, 0);
+    }, [loans]);
 
     // ========== Yearly Settings ==========
     const updateYearlySettings = useCallback(async (year: number, settings: { targetNetWorth?: number; startNetWorth?: number }) => {
@@ -397,6 +574,7 @@ export function useSupabaseFinanceData() {
         transactions,
         stocks,
         financialProducts,
+        loans,
         yearlySettings,
         isLoading,
 
@@ -421,6 +599,13 @@ export function useSupabaseFinanceData() {
         getProductsByType,
         getTotalProductValue,
         getTotalProductReturn,
+
+        // Loan methods
+        addLoan,
+        updateLoan,
+        deleteLoan,
+        getTotalLoanRemaining,
+        getTotalMonthlyPayment,
 
         // Yearly settings
         updateYearlySettings,
