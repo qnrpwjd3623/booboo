@@ -79,7 +79,14 @@ function generateYearlyData(
   });
 
   const currentNetWorth = monthlyData[monthlyData.length - 1]?.netWorth || startNetWorth;
-  const currentAmount = currentNetWorth - startNetWorth;
+  // 연간 목표 달성률: 순수 수입-지출 기반 (주식·금융상품·대출 제외)
+  const yearlyIncome = transactions
+    .filter(t => t.year === year && t.type === 'income')
+    .reduce((sum, t) => sum + t.amount, 0);
+  const yearlyExpense = transactions
+    .filter(t => t.year === year && t.type === 'expense')
+    .reduce((sum, t) => sum + t.amount, 0);
+  const currentAmount = yearlyIncome - yearlyExpense;
   const targetAmount = targetNetWorth - startNetWorth;
 
   let streak = 0;
