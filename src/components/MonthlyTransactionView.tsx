@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, Pencil, Trash2, Search, TrendingUp, TrendingDown } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, Search, TrendingUp, TrendingDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Transaction, CustomCategory } from '@/types';
 import { getCategoryIcon } from '@/constants/categories';
 import { PersonSpendingCard } from './PersonSpendingCard';
@@ -11,6 +11,7 @@ interface MonthlyTransactionViewProps {
   transactions: Transaction[];
   customCategories: CustomCategory[];
   onBack: () => void;
+  onNavigate: (year: number, month: number) => void;
   onAddTransaction: () => void;
   onEditTransaction: (transaction: Transaction) => void;
   onDeleteTransaction: (id: string) => void;
@@ -28,6 +29,7 @@ export function MonthlyTransactionView({
   month,
   transactions,
   onBack,
+  onNavigate,
   onAddTransaction,
   onEditTransaction,
   onDeleteTransaction,
@@ -85,18 +87,43 @@ export function MonthlyTransactionView({
       {/* 서브 헤더 */}
       <div className="sticky top-0 z-20 bg-[#F5F5F7]/90 backdrop-blur-xl border-b border-gray-200/40 px-4 py-3">
         <div className="max-w-[1200px] mx-auto flex items-center gap-3">
+          {/* 뒤로가기 */}
           <button
             onClick={onBack}
             className="w-9 h-9 flex items-center justify-center rounded-xl bg-white shadow-sm hover:shadow-md transition-all flex-shrink-0"
           >
             <ArrowLeft className="w-5 h-5 text-gray-600" />
           </button>
-          <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-bold text-gray-900 truncate">
-              {year}년 {MONTH_NAMES[month - 1]} 가계부
-            </h2>
-            <p className="text-xs text-gray-400">거래 {monthTxns.length}건</p>
+
+          {/* 중앙: 이전달 ← 타이틀 → 다음달 */}
+          <div className="flex-1 flex items-center justify-center gap-2 min-w-0">
+            <button
+              onClick={() => {
+                if (month === 1) onNavigate(year - 1, 12);
+                else onNavigate(year, month - 1);
+              }}
+              className="w-8 h-8 flex items-center justify-center rounded-xl bg-white shadow-sm hover:shadow-md hover:bg-orange-50 hover:text-orange-500 text-gray-500 transition-all flex-shrink-0"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <div className="text-center min-w-0">
+              <h2 className="text-base font-bold text-gray-900 truncate">
+                {year}년 {MONTH_NAMES[month - 1]} 가계부
+              </h2>
+              <p className="text-xs text-gray-400">거래 {monthTxns.length}건</p>
+            </div>
+            <button
+              onClick={() => {
+                if (month === 12) onNavigate(year + 1, 1);
+                else onNavigate(year, month + 1);
+              }}
+              className="w-8 h-8 flex items-center justify-center rounded-xl bg-white shadow-sm hover:shadow-md hover:bg-orange-50 hover:text-orange-500 text-gray-500 transition-all flex-shrink-0"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
+
+          {/* 거래 추가 */}
           <button
             onClick={onAddTransaction}
             className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 text-white rounded-xl font-semibold text-sm shadow-sm hover:bg-orange-600 active:scale-95 transition-all flex-shrink-0"

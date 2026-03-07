@@ -133,6 +133,7 @@ function App() {
   const [editingProduct, setEditingProduct] = useState<FinancialProduct | null>(null);
   const [editingLoan, setEditingLoan] = useState<LoanItem | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [navDirection, setNavDirection] = useState<'prev' | 'next'>('next');
 
   const {
     transactions,
@@ -515,10 +516,10 @@ function App() {
           /* ── 월간 거래 관리 화면 ── */
           <motion.div
             key={`monthly-${selectedYear}-${selectedMonth}`}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -16 }}
-            transition={{ duration: 0.25 }}
+            initial={{ opacity: 0, x: navDirection === 'next' ? 40 : -40 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: navDirection === 'next' ? -40 : 40 }}
+            transition={{ duration: 0.22, ease: 'easeInOut' }}
           >
             <MonthlyTransactionView
               year={selectedYear}
@@ -526,6 +527,13 @@ function App() {
               transactions={transactions}
               customCategories={customCategories}
               onBack={() => setSelectedMonth(null)}
+              onNavigate={(y, m) => {
+                setNavDirection(
+                  y > selectedYear || (y === selectedYear && m > selectedMonth) ? 'next' : 'prev',
+                );
+                setSelectedYear(y);
+                setSelectedMonth(m);
+              }}
               onAddTransaction={() => {
                 setEditingTransaction(null);
                 setIsTransactionFormOpen(true);
