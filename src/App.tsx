@@ -31,10 +31,14 @@ function generateYearlyData(
   transactions: Transaction[],
   stocks: StockItem[],
   products: FinancialProduct[],
+  loans: LoanItem[],
   targetNetWorth: number,
   startNetWorth: number,
   monthlyTargets: Record<number, number>
 ) {
+  // 대출 잔액 (부채) - 순자산에서 차감
+  const loanDebt = loans.reduce((sum, l) => sum + l.remainingPrincipal, 0);
+
   const monthlyData = Array.from({ length: 12 }, (_, i) => {
     const month = i + 1;
     const monthTransactions = transactions.filter(t => t.year === year && t.month === month);
@@ -51,7 +55,10 @@ function generateYearlyData(
     }
     const stockValue = stocks.reduce((sum, s) => sum + (s.shares * s.currentPrice), 0);
     const productValue = products.reduce((sum, p) => sum + p.currentValue, 0);
+    // 총 자산 = 현금흐름 + 주식 + 금융상품(부동산 포함)
     netWorth += stockValue + productValue;
+    // 순자산 = 총 자산 - 대출 잔액 (부채 차감)
+    netWorth -= loanDebt;
 
     const targetSavingsRate = monthlyTargets[month] ?? 40;
 
@@ -65,9 +72,9 @@ function generateYearlyData(
       targetSavingsRate,
       targetAchieved: savingsRate >= targetSavingsRate,
       stockValue,
-      cashValue: netWorth - stockValue - productValue,
+      cashValue: netWorth - stockValue - productValue + loanDebt, // 현금 = 순자산에서 주식/금융상품 제외
       pensionValue: products.filter(p => p.type === 'pension').reduce((sum, p) => sum + p.currentValue, 0),
-      debtValue: 0,
+      debtValue: loanDebt,
     };
   });
 
@@ -100,6 +107,8 @@ function generateYearlyData(
     monthlyData,
     stocks,
     financialProducts: products,
+    loans,
+    loanDebt,
     streak,
     challenge: null,
   };
@@ -190,11 +199,12 @@ function App() {
       transactions,
       stocks,
       financialProducts,
+      loans,
       settings.targetNetWorth,
       settings.startNetWorth,
       monthlyTargets
     );
-  }, [selectedYear, transactions, stocks, financialProducts, settings, monthlyTargets]);
+  }, [selectedYear, transactions, stocks, financialProducts, loans, settings, monthlyTargets]);
 
   const currentMonth = new Date().getMonth() + 1;
   const monthsLeft = 12 - currentMonth;
@@ -678,6 +688,7 @@ function App() {
                 targetNetWorth={yearlyData.targetNetWorth}
                 averageSavingsRate={yearlyData.averageSavingsRate}
                 previousNetWorth={yearlyData.monthlyData.find(m => m.month === currentMonth - 1)?.netWorth}
+                totalLoan={yearlyData.loanDebt}
               />
             </div>
 
@@ -728,25 +739,23 @@ function App() {
               />
             </div>
 
-            {/* Financial Products */}
-            {financialProducts.length > 0 && (
-              <div className="mt-6 sm:mt-8">
-                <FinancialProductsList
-                  products={financialProducts}
-                  onEdit={openProductEdit}
-                  onDelete={handleDeleteProduct}
-                />
-              </div>
-            )}
-
-            {/* 대출 현황 */}
-            {loans.length > 0 && (
-              <div className="mt-6 sm:mt-8">
-                <LoanList
-                  loans={loans}
-                  onEdit={openLoanEdit}
-                  onDelete={handleDeleteLoan}
-                />
+            {/* 자산 & 금융상품 + 대출 현황 — 2열 그리드 (lg 이상) */}
+            {(financialProducts.length > 0 || loans.length > 0) && (
+              <div className={`mt-6 sm:mt-8 ${financialProducts.length > 0 && loans.length > 0 ? 'grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6' : ''}`}>
+                {financialProducts.length > 0 && (
+                  <FinancialProductsList
+                    products={financialProducts}
+                    onEdit={openProductEdit}
+                    onDelete={handleDeleteProduct}
+                  />
+                )}
+                {loans.length > 0 && (
+                  <LoanList
+                    loans={loans}
+                    onEdit={openLoanEdit}
+                    onDelete={handleDeleteLoan}
+                  />
+                )}
               </div>
             )}
           </motion.main>
