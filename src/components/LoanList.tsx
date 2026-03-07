@@ -14,17 +14,6 @@ export function LoanList({ loans, onEdit, onDelete }: LoanListProps) {
 
   if (loans.length === 0) return null;
 
-  const totalPrincipal   = loans.reduce((s, l) => s + l.principal, 0);
-  const totalRemaining   = loans.reduce((s, l) => s + l.remainingPrincipal, 0);
-  const totalMonthlyPay  = loans.reduce((s, l) => s + l.monthlyPayment, 0);
-  const totalRepaid      = totalPrincipal - totalRemaining;
-  const overallRatio     = totalPrincipal > 0 ? (totalRepaid / totalPrincipal) * 100 : 0;
-
-  const loanTypeLabel: Record<string, string> = {
-    equal_payment:   '원리금균등',
-    equal_principal: '원금균등',
-  };
-
   /** 거치 기간 중인지 판단 */
   const getGracePhase = (loan: LoanItem): { isGrace: boolean; graceEndDate: Date | null } => {
     if (!loan.hasGracePeriod || loan.gracePeriodMonths <= 0 || !loan.startDate) {
@@ -39,6 +28,22 @@ export function LoanList({ loans, onEdit, onDelete }: LoanListProps) {
   /** 이자만 납부 금액 (거치 기간) */
   const getInterestOnlyPayment = (loan: LoanItem) =>
     Math.round(loan.principal * loan.interestRate / 100 / 12);
+
+  const loanTypeLabel: Record<string, string> = {
+    equal_payment:   '원리금균등',
+    equal_principal: '원금균등',
+  };
+
+  const totalPrincipal  = loans.reduce((s, l) => s + l.principal, 0);
+  const totalRemaining  = loans.reduce((s, l) => s + l.remainingPrincipal, 0);
+  const totalRepaid     = totalPrincipal - totalRemaining;
+  const overallRatio    = totalPrincipal > 0 ? (totalRepaid / totalPrincipal) * 100 : 0;
+
+  // 거치 중인 대출은 이자만 납부 금액으로 집계
+  const totalMonthlyPay = loans.reduce((s, l) => {
+    const { isGrace } = getGracePhase(l);
+    return s + (isGrace ? getInterestOnlyPayment(l) : l.monthlyPayment);
+  }, 0);
 
   return (
     <motion.div
