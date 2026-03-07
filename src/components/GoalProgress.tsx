@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { CircularProgress } from './CircularProgress';
-import { Flame, Target, TrendingDown } from 'lucide-react';
+import { Flame, Loader2, RefreshCw, Target, TrendingDown } from 'lucide-react';
 import { formatCurrency } from '@/utils/format';
 import type { Challenge } from '@/types';
 import { useInView } from '@/hooks/useInView';
@@ -11,6 +11,8 @@ interface GoalProgressProps {
   streak: number;
   challenge: Challenge | null;
   monthsLeft: number;
+  onRefreshChallenge?: () => void;
+  isLoadingChallenge?: boolean;
 }
 
 export function GoalProgress({
@@ -18,7 +20,9 @@ export function GoalProgress({
   targetAmount,
   streak,
   challenge,
-  monthsLeft
+  monthsLeft,
+  onRefreshChallenge,
+  isLoadingChallenge = false,
 }: GoalProgressProps) {
   const [ref, isInView] = useInView<HTMLDivElement>({ threshold: 0.2 });
   const percentage = Math.min((currentAmount / targetAmount) * 100, 100);
@@ -101,36 +105,55 @@ export function GoalProgress({
       </motion.div>
 
       {/* Challenge */}
-      {challenge && (
-        <motion.div
-          className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-4"
-          initial={{ opacity: 0, x: -20 }}
-          animate={isInView ? { opacity: 1, x: 0 } : {}}
-          transition={{ delay: 0.8 }}
-        >
-          <div className="flex items-center gap-2 mb-3">
+      <motion.div
+        className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-4"
+        initial={{ opacity: 0, x: -20 }}
+        animate={isInView ? { opacity: 1, x: 0 } : {}}
+        transition={{ delay: 0.8 }}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
             <TrendingDown className="w-4 h-4 text-blue-500" />
             <p className="text-sm font-medium text-gray-900">이번 달 챌린지</p>
           </div>
-          <p className="text-sm text-gray-600 mb-3">{challenge.title}</p>
+          <button
+            onClick={onRefreshChallenge}
+            disabled={isLoadingChallenge}
+            className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center hover:bg-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="챌린지 새로고침"
+          >
+            {isLoadingChallenge
+              ? <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" />
+              : <RefreshCw className="w-3.5 h-3.5 text-blue-500" />
+            }
+          </button>
+        </div>
 
-          {/* Challenge Progress */}
-          <div className="relative">
-            <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-              <motion.div
-                className="h-full bg-gradient-to-r from-blue-400 to-purple-500 rounded-full"
-                initial={{ width: 0 }}
-                animate={isInView ? { width: `${(challenge.currentReduction / challenge.targetReduction) * 100}%` } : {}}
-                transition={{ duration: 1, delay: 1 }}
-              />
+        {challenge ? (
+          <>
+            <p className="text-sm text-gray-600 mb-3">{challenge.title}</p>
+            {/* Challenge Progress */}
+            <div className="relative">
+              <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full bg-gradient-to-r from-blue-400 to-purple-500 rounded-full"
+                  initial={{ width: 0 }}
+                  animate={isInView ? { width: `${(challenge.currentReduction / challenge.targetReduction) * 100}%` } : {}}
+                  transition={{ duration: 1, delay: 1 }}
+                />
+              </div>
+              <div className="flex justify-between mt-2">
+                <span className="text-xs text-gray-500">현재 {challenge.currentReduction}%</span>
+                <span className="text-xs text-gray-500">목표 {challenge.targetReduction}%</span>
+              </div>
             </div>
-            <div className="flex justify-between mt-2">
-              <span className="text-xs text-gray-500">현재 {challenge.currentReduction}%</span>
-              <span className="text-xs text-gray-500">목표 {challenge.targetReduction}%</span>
-            </div>
-          </div>
-        </motion.div>
-      )}
+          </>
+        ) : (
+          <p className="text-xs text-gray-400 text-center py-2">
+            {isLoadingChallenge ? 'AI가 챌린지를 만들고 있어요...' : '새로고침 버튼을 눌러 이번 달 챌린지를 받아보세요 🎯'}
+          </p>
+        )}
+      </motion.div>
     </motion.div>
   );
 }

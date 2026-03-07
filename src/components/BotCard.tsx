@@ -9,12 +9,14 @@ interface BotCardProps {
   currentNetWorth: number;
   targetNetWorth: number;
   streak: number;
+  onRefresh?: () => void;
+  isLoading?: boolean;
 }
 
-export function BotCard({ messages, currentNetWorth, targetNetWorth, streak }: BotCardProps) {
+export function BotCard({ messages, currentNetWorth, targetNetWorth, streak, onRefresh, isLoading = false }: BotCardProps) {
   const [ref, isInView] = useInView<HTMLDivElement>({ threshold: 0.2 });
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
-  const [isTyping, setIsTyping] = useState(true);
+  const [isTyping, setIsTyping] = useState(false);
 
   const progress = (currentNetWorth / targetNetWorth) * 100;
   const monthsLeft = 12 - new Date().getMonth() - 1;
@@ -52,8 +54,9 @@ export function BotCard({ messages, currentNetWorth, targetNetWorth, streak }: B
     }
   };
 
-  const allMessages = [getContextualMessage(), ...messages];
-  const currentMessage = allMessages[currentMessageIndex];
+  const allMessages = messages.length > 0 ? messages : [getContextualMessage()];
+  const safeIndex = currentMessageIndex % allMessages.length;
+  const currentMessage = allMessages[safeIndex];
 
   useEffect(() => {
     if (isInView) {
@@ -65,9 +68,17 @@ export function BotCard({ messages, currentNetWorth, targetNetWorth, streak }: B
     }
   }, [isInView, currentMessageIndex]);
 
-  const handleRefresh = () => {
-    setIsTyping(true);
-    setCurrentMessageIndex((prev) => (prev + 1) % allMessages.length);
+  // 로딩 중에는 타이핑 애니메이션 표시
+  const showTyping = isTyping || isLoading;
+
+  const handleRefreshClick = () => {
+    if (onRefresh) {
+      onRefresh();
+    } else {
+      // onRefresh가 없으면 로컬 메시지 순환
+      setIsTyping(true);
+      setCurrentMessageIndex((prev) => (prev + 1) % allMessages.length);
+    }
   };
 
   return (
@@ -96,17 +107,20 @@ export function BotCard({ messages, currentNetWorth, targetNetWorth, streak }: B
             <h3 className="text-lg font-bold">부부동산봇</h3>
             <div className="flex items-center gap-1">
               <Sparkles className="w-3 h-3 text-yellow-300" />
-              <span className="text-xs text-white/80">AI 재무 조언</span>
+              <span className="text-xs text-white/80">
+                {messages.length > 0 ? 'AI 재무 조언' : '새로고침으로 AI 조언 받기'}
+              </span>
             </div>
           </div>
         </div>
         <motion.button
-          onClick={handleRefresh}
-          className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center hover:bg-white/30 transition-colors"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
+          onClick={handleRefreshClick}
+          disabled={isLoading}
+          className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center hover:bg-white/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          whileHover={{ scale: isLoading ? 1 : 1.05 }}
+          whileTap={{ scale: isLoading ? 1 : 0.95 }}
         >
-          <RefreshCw className="w-5 h-5 text-white" />
+          <RefreshCw className={`w-5 h-5 text-white ${isLoading ? 'animate-spin' : ''}`} />
         </motion.button>
       </div>
 
@@ -116,7 +130,7 @@ export function BotCard({ messages, currentNetWorth, targetNetWorth, streak }: B
         <div className="absolute -top-2 left-6 w-4 h-4 bg-white/10 backdrop-blur-sm transform rotate-45" />
         
         <AnimatePresence mode="wait">
-          {isTyping ? (
+          {showTyping ? (
             <motion.div
               key="typing"
               initial={{ opacity: 0 }}
