@@ -37,7 +37,7 @@ export interface FinancialContext {
 
 // Gemini API 키
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
 
 async function callGeminiAPI(prompt: string, systemInstruction?: string): Promise<string> {
   const body: Record<string, unknown> = {
