@@ -145,7 +145,45 @@ function toAppProduct(db: DbProduct): FinancialProduct {
     };
 }
 
+// ---- Loan memo 인코딩/디코딩 (거치 기간 데이터 포함) ----
+// 형식: {"__grace": true, "__grace_months": 12, "__memo": "사용자 메모"}
+
+function encodeLoanMemo(
+    userMemo: string | undefined,
+    hasGracePeriod: boolean,
+    gracePeriodMonths: number,
+): string {
+    if (!hasGracePeriod) return userMemo || '';
+    return JSON.stringify({
+        __grace: true,
+        __grace_months: gracePeriodMonths,
+        __memo: userMemo || '',
+    });
+}
+
+function decodeLoanMemo(memoStr: string | null): {
+    memo: string;
+    hasGracePeriod: boolean;
+    gracePeriodMonths: number;
+} {
+    if (!memoStr) return { memo: '', hasGracePeriod: false, gracePeriodMonths: 0 };
+    try {
+        const parsed = JSON.parse(memoStr);
+        if (parsed.__grace) {
+            return {
+                memo: parsed.__memo || '',
+                hasGracePeriod: true,
+                gracePeriodMonths: parsed.__grace_months || 0,
+            };
+        }
+    } catch {
+        // plain text memo
+    }
+    return { memo: memoStr, hasGracePeriod: false, gracePeriodMonths: 0 };
+}
+
 function toAppLoan(db: DbLoan): LoanItem {
+    const { memo, hasGracePeriod, gracePeriodMonths } = decodeLoanMemo(db.memo);
     return {
         id: db.id,
         name: db.name,
@@ -159,7 +197,9 @@ function toAppLoan(db: DbLoan): LoanItem {
         endDate: db.end_date || '',
         totalMonths: db.total_months,
         owner: db.owner || 'shared',
-        memo: db.memo || undefined,
+        memo: memo || undefined,
+        hasGracePeriod,
+        gracePeriodMonths,
     };
 }
 
@@ -455,6 +495,9 @@ export function useSupabaseFinanceData() {
 
     // ========== Loans ==========
     const addLoan = useCallback(async (loan: Omit<LoanItem, 'id'>) => {
+        // 거치 데이터를 memo 필드에 인코딩
+        const memoStr = encodeLoanMemo(loan.memo, loan.hasGracePeriod, loan.gracePeriodMonths);
+
         const { data, error } = await supabase
             .from('loans')
             .insert({
@@ -469,7 +512,7 @@ export function useSupabaseFinanceData() {
                 end_date: loan.endDate || null,
                 total_months: loan.totalMonths,
                 owner: loan.owner || 'shared',
-                memo: loan.memo || '',
+                memo: memoStr,
             })
             .select()
             .single();
@@ -495,12 +538,25 @@ export function useSupabaseFinanceData() {
         if (updates.endDate !== undefined) dbUpdates.end_date = updates.endDate || null;
         if (updates.totalMonths !== undefined) dbUpdates.total_months = updates.totalMonths;
         if (updates.owner !== undefined) dbUpdates.owner = updates.owner;
-        if (updates.memo !== undefined) dbUpdates.memo = updates.memo || '';
+
+        // memo + 거치 데이터 업데이트 (셋 중 하나라도 바뀌면 재인코딩)
+        if (
+            updates.memo !== undefined ||
+            updates.hasGracePeriod !== undefined ||
+            updates.gracePeriodMonths !== undefined
+        ) {
+            // 현재 저장된 대출 정보에서 기존 값을 가져와 병합
+            const existing = loans.find(l => l.id === id);
+            const mergedHasGrace  = updates.hasGracePeriod  ?? existing?.hasGracePeriod  ?? false;
+            const mergedGraceMonths = updates.gracePeriodMonths ?? existing?.gracePeriodMonths ?? 0;
+            const mergedMemo      = updates.memo              ?? existing?.memo;
+            dbUpdates.memo = encodeLoanMemo(mergedMemo, mergedHasGrace, mergedGraceMonths);
+        }
 
         const { error } = await supabase.from('loans').update(dbUpdates).eq('id', id);
         if (error) { console.error('Update loan error:', error); return; }
         setLoans(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l));
-    }, []);
+    }, [loans]);
 
     const deleteLoan = useCallback(async (id: string) => {
         const { error } = await supabase.from('loans').delete().eq('id', id);

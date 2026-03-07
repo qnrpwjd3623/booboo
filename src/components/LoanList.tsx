@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { CreditCard, Percent, Calendar, Building2, ChevronDown, ChevronUp } from 'lucide-react';
+import { CreditCard, Percent, Calendar, Building2, ChevronDown, ChevronUp, Clock } from 'lucide-react';
 import { useState } from 'react';
 import type { LoanItem } from '@/types';
 
@@ -24,6 +24,21 @@ export function LoanList({ loans, onEdit, onDelete }: LoanListProps) {
     equal_payment:   '원리금균등',
     equal_principal: '원금균등',
   };
+
+  /** 거치 기간 중인지 판단 */
+  const getGracePhase = (loan: LoanItem): { isGrace: boolean; graceEndDate: Date | null } => {
+    if (!loan.hasGracePeriod || loan.gracePeriodMonths <= 0 || !loan.startDate) {
+      return { isGrace: false, graceEndDate: null };
+    }
+    const start = new Date(loan.startDate);
+    const graceEnd = new Date(start);
+    graceEnd.setMonth(graceEnd.getMonth() + loan.gracePeriodMonths);
+    return { isGrace: new Date() < graceEnd, graceEndDate: graceEnd };
+  };
+
+  /** 이자만 납부 금액 (거치 기간) */
+  const getInterestOnlyPayment = (loan: LoanItem) =>
+    Math.round(loan.principal * loan.interestRate / 100 / 12);
 
   return (
     <motion.div
@@ -79,6 +94,10 @@ export function LoanList({ loans, onEdit, onDelete }: LoanListProps) {
             : 0;
           const isExpanded  = expanded === loan.id;
 
+          // 거치 단계 계산
+          const { isGrace, graceEndDate } = getGracePhase(loan);
+          const interestOnlyPayment = getInterestOnlyPayment(loan);
+
           // 만기까지 남은 개월 계산
           let monthsLeft = 0;
           if (loan.endDate) {
@@ -89,6 +108,11 @@ export function LoanList({ loans, onEdit, onDelete }: LoanListProps) {
               (end.getMonth() - now.getMonth())
             );
           }
+
+          // 거치 기간이 끝나는 날짜 포맷
+          const graceEndStr = graceEndDate
+            ? `${graceEndDate.getFullYear()}.${String(graceEndDate.getMonth() + 1).padStart(2, '0')}`
+            : '';
 
           return (
             <motion.div
@@ -114,6 +138,20 @@ export function LoanList({ loans, onEdit, onDelete }: LoanListProps) {
                       }`}>
                         {loanTypeLabel[loan.loanType]}
                       </span>
+
+                      {/* 거치/비거치 배지 */}
+                      {loan.hasGracePeriod && (
+                        isGrace ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-100 text-amber-700 text-xs font-semibold shrink-0">
+                            <Clock className="w-3 h-3" /> 거치중
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-lg bg-teal-100 text-teal-700 text-xs font-semibold shrink-0">
+                            상환중
+                          </span>
+                        )
+                      )}
+
                       {loan.owner !== 'shared' && (
                         <span className="px-2 py-0.5 rounded-lg text-xs font-medium bg-purple-100 text-purple-600 shrink-0">
                           {loan.owner}
@@ -154,6 +192,17 @@ export function LoanList({ loans, onEdit, onDelete }: LoanListProps) {
                     />
                   </div>
                 </div>
+
+                {/* 거치 기간 중일 때 간략 안내 */}
+                {isGrace && (
+                  <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-600">
+                    <Clock className="w-3 h-3 shrink-0" />
+                    <span>
+                      이자만 납부 중 ({interestOnlyPayment.toLocaleString()}원/월)
+                      {graceEndStr && ` · ${graceEndStr}까지`}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* 카드 상세 (펼쳤을 때) */}
@@ -175,15 +224,37 @@ export function LoanList({ loans, onEdit, onDelete }: LoanListProps) {
                         <p className="text-sm font-semibold text-gray-900">{loan.interestRate}%</p>
                       </div>
                     </div>
+
+                    {/* 현재 납부 금액 (거치중이면 이자만, 아니면 원리금) */}
                     <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <CreditCard className="w-3.5 h-3.5 text-blue-500" />
+                      <div className={`w-7 h-7 ${isGrace ? 'bg-amber-100' : 'bg-blue-100'} rounded-lg flex items-center justify-center`}>
+                        <CreditCard className={`w-3.5 h-3.5 ${isGrace ? 'text-amber-500' : 'text-blue-500'}`} />
                       </div>
                       <div>
-                        <p className="text-xs text-gray-400">월 납부금</p>
-                        <p className="text-sm font-semibold text-gray-900">{loan.monthlyPayment.toLocaleString()}원</p>
+                        <p className="text-xs text-gray-400">
+                          {isGrace ? '현재 월 납부 (이자만)' : '월 납부금'}
+                        </p>
+                        <p className={`text-sm font-semibold ${isGrace ? 'text-amber-600' : 'text-gray-900'}`}>
+                          {isGrace
+                            ? `${interestOnlyPayment.toLocaleString()}원`
+                            : `${loan.monthlyPayment.toLocaleString()}원`}
+                        </p>
                       </div>
                     </div>
+
+                    {/* 거치 기간 중이면 상환 납부금도 별도 표시 */}
+                    {isGrace && (
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <CreditCard className="w-3.5 h-3.5 text-blue-500" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-400">상환 시작 후 납부</p>
+                          <p className="text-sm font-semibold text-gray-900">{loan.monthlyPayment.toLocaleString()}원</p>
+                        </div>
+                      </div>
+                    )}
+
                     {monthsLeft > 0 && (
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 bg-green-100 rounded-lg flex items-center justify-center">
@@ -195,6 +266,20 @@ export function LoanList({ loans, onEdit, onDelete }: LoanListProps) {
                         </div>
                       </div>
                     )}
+
+                    {/* 거치 관련 정보 */}
+                    {loan.hasGracePeriod && loan.gracePeriodMonths > 0 && (
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center">
+                          <Clock className="w-3.5 h-3.5 text-amber-500" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-400">거치 기간</p>
+                          <p className="text-sm font-semibold text-gray-900">{loan.gracePeriodMonths}개월</p>
+                        </div>
+                      </div>
+                    )}
+
                     {loan.startDate && (
                       <div>
                         <p className="text-xs text-gray-400">시작일</p>
@@ -210,10 +295,42 @@ export function LoanList({ loans, onEdit, onDelete }: LoanListProps) {
                     {loan.totalMonths > 0 && (
                       <div>
                         <p className="text-xs text-gray-400">총 상환 기간</p>
-                        <p className="text-sm font-medium text-gray-700">{loan.totalMonths}개월</p>
+                        <p className="text-sm font-medium text-gray-700">
+                          {loan.totalMonths}개월
+                          {loan.hasGracePeriod && loan.gracePeriodMonths > 0 && (
+                            <span className="text-gray-400 ml-1 text-xs">
+                              (거치 {loan.gracePeriodMonths} + 상환 {loan.totalMonths - loan.gracePeriodMonths})
+                            </span>
+                          )}
+                        </p>
                       </div>
                     )}
                   </div>
+
+                  {/* 거치 기간 게이지 (거치 포함 대출인 경우) */}
+                  {loan.hasGracePeriod && loan.gracePeriodMonths > 0 && loan.totalMonths > 0 && (
+                    <div className="mt-3 p-3 bg-amber-50 rounded-xl">
+                      <p className="text-xs text-amber-700 font-medium mb-2">거치 → 상환 타임라인</p>
+                      <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                        <div className="h-2 flex rounded-full overflow-hidden">
+                          {/* 거치 기간 */}
+                          <div
+                            className="bg-amber-400 h-2"
+                            style={{ width: `${(loan.gracePeriodMonths / loan.totalMonths) * 100}%` }}
+                          />
+                          {/* 상환 기간 */}
+                          <div
+                            className="bg-gradient-to-r from-red-400 to-orange-400 h-2 flex-1"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-between mt-1 text-xs text-gray-500">
+                        <span className="text-amber-600">거치 {loan.gracePeriodMonths}개월</span>
+                        <span className="text-red-500">상환 {loan.totalMonths - loan.gracePeriodMonths}개월</span>
+                      </div>
+                    </div>
+                  )}
+
                   {loan.memo && (
                     <p className="mt-2 text-xs text-gray-400 bg-gray-50 rounded-lg p-2">{loan.memo}</p>
                   )}
@@ -244,7 +361,7 @@ export function LoanList({ loans, onEdit, onDelete }: LoanListProps) {
         </div>
         <div className="flex justify-between text-sm">
           <span className="text-gray-500">월 납부 합계</span>
-          <span className="font-semibold text-orange-600">{totalMonthlyPay.toLocaleString()}원</span>
+          <span className="font-semibold text-orange-600">{totalMonthlyPay.toLocaleString()}원/월</span>
         </div>
       </div>
     </motion.div>

@@ -68,12 +68,15 @@ export interface LoanItem {
   principal: number;           // 대출 원금 (전체 대출금액)
   remainingPrincipal: number;  // 현재 남은 원금
   interestRate: number;        // 연 이자율 (%)
-  monthlyPayment: number;      // 월 납부금
+  monthlyPayment: number;      // 월 납부금 (상환 기간 기준)
   startDate: string;           // 대출 시작일
   endDate: string;             // 만기일
   totalMonths: number;         // 총 납부 개월 수 (전체 기간)
   owner: string;               // 파트너 이름 or 'shared'
   memo?: string;
+  // 거치 관련
+  hasGracePeriod: boolean;     // 거치 여부 (true = 거치, false = 비거치)
+  gracePeriodMonths: number;   // 거치 기간 (개월), hasGracePeriod가 true일 때만 의미 있음
 }
 
 // 월별 데이터

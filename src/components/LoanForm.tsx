@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Building2, Wallet, Percent, Calendar, FileText, CreditCard } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Building2, Wallet, Percent, Calendar, FileText, CreditCard, Clock } from 'lucide-react';
 import { Modal } from './Modal';
 import type { LoanItem } from '@/types';
 
@@ -26,6 +26,9 @@ export function LoanForm({ onAdd, onUpdate, onClose, isOpen, editLoan, partnerNa
   const [totalMonths, setTotalMonths] = useState('');
   const [owner, setOwner] = useState('shared');
   const [memo, setMemo] = useState('');
+  // 거치 관련
+  const [hasGracePeriod, setHasGracePeriod] = useState(false);
+  const [gracePeriodMonths, setGracePeriodMonths] = useState('');
 
   const isEditing = !!editLoan;
 
@@ -43,6 +46,8 @@ export function LoanForm({ onAdd, onUpdate, onClose, isOpen, editLoan, partnerNa
       setTotalMonths(editLoan.totalMonths.toString());
       setOwner(editLoan.owner || 'shared');
       setMemo(editLoan.memo || '');
+      setHasGracePeriod(editLoan.hasGracePeriod || false);
+      setGracePeriodMonths(editLoan.gracePeriodMonths > 0 ? editLoan.gracePeriodMonths.toString() : '');
     } else {
       setName('');
       setBank('');
@@ -56,6 +61,8 @@ export function LoanForm({ onAdd, onUpdate, onClose, isOpen, editLoan, partnerNa
       setTotalMonths('');
       setOwner('shared');
       setMemo('');
+      setHasGracePeriod(false);
+      setGracePeriodMonths('');
     }
   }, [editLoan, isOpen]);
 
@@ -70,14 +77,31 @@ export function LoanForm({ onAdd, onUpdate, onClose, isOpen, editLoan, partnerNa
   const monthlyNum = parseNum(monthlyPayment);
   const rateNum = parseFloat(interestRate || '0');
   const totalMonthsNum = parseInt(totalMonths || '0');
+  const gracePeriodMonthsNum = parseInt(gracePeriodMonths || '0');
 
   // 상환률: (원금 - 남은원금) / 원금
   const paidAmount = principalNum - remainingNum;
   const repayRatio = principalNum > 0 ? Math.max(0, Math.min(100, (paidAmount / principalNum) * 100)) : 0;
 
+  // 거치 기간 이자만 납부 금액 (원금 × 연이자율 / 12)
+  const monthlyInterestOnly = principalNum > 0 && rateNum > 0
+    ? Math.round(principalNum * rateNum / 100 / 12)
+    : 0;
+
+  // 거치 기간 현재 상태 계산
+  const isCurrentlyInGracePeriod = (): boolean => {
+    if (!hasGracePeriod || !startDate || gracePeriodMonthsNum <= 0) return false;
+    const start = new Date(startDate);
+    const graceEnd = new Date(start);
+    graceEnd.setMonth(graceEnd.getMonth() + gracePeriodMonthsNum);
+    return new Date() < graceEnd;
+  };
+
   // 총 이자 예상 (원리금균등 단순 계산)
-  const totalPaid = monthlyNum * totalMonthsNum;
-  const totalInterest = totalPaid > principalNum ? totalPaid - principalNum : 0;
+  const repayMonths = hasGracePeriod ? totalMonthsNum - gracePeriodMonthsNum : totalMonthsNum;
+  const totalPaid = monthlyNum * repayMonths;
+  const graceInterestTotal = hasGracePeriod ? monthlyInterestOnly * gracePeriodMonthsNum : 0;
+  const totalInterest = totalPaid > 0 ? (totalPaid - principalNum) + graceInterestTotal : 0;
 
   // 남은 납부 개월 추정 (남은원금 / 월납부금)
   const estimatedMonthsLeft = monthlyNum > 0 ? Math.ceil(remainingNum / monthlyNum) : 0;
@@ -101,6 +125,8 @@ export function LoanForm({ onAdd, onUpdate, onClose, isOpen, editLoan, partnerNa
       totalMonths: totalMonthsNum,
       owner,
       memo: memo || undefined,
+      hasGracePeriod,
+      gracePeriodMonths: hasGracePeriod ? gracePeriodMonthsNum : 0,
     };
 
     if (isEditing && editLoan && onUpdate) {
@@ -193,6 +219,64 @@ export function LoanForm({ onAdd, onUpdate, onClose, isOpen, editLoan, partnerNa
           </div>
         </div>
 
+        {/* 거치 / 비거치 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">거치 여부</label>
+          <div className="flex gap-2">
+            {[
+              { val: false, label: '비거치', desc: '처음부터 원금+이자 납부' },
+              { val: true,  label: '거치',   desc: '거치 기간엔 이자만 납부' },
+            ].map((t) => (
+              <button
+                key={String(t.val)}
+                type="button"
+                onClick={() => setHasGracePeriod(t.val)}
+                className={`flex-1 py-3 px-3 rounded-xl text-sm transition-all text-left ${
+                  hasGracePeriod === t.val
+                    ? 'bg-amber-500 text-white ring-2 ring-amber-500 ring-offset-2'
+                    : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                <div className="font-semibold">{t.label}</div>
+                <div className={`text-xs mt-0.5 ${hasGracePeriod === t.val ? 'text-amber-100' : 'text-gray-400'}`}>
+                  {t.desc}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* 거치 기간 입력 (거치 선택 시) */}
+          <AnimatePresence>
+            {hasGracePeriod && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-3 relative">
+                  <Clock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-500" />
+                  <input
+                    type="number"
+                    value={gracePeriodMonths}
+                    onChange={(e) => setGracePeriodMonths(e.target.value)}
+                    placeholder="거치 기간 (개월, 예: 12)"
+                    min="1"
+                    className="w-full pl-12 pr-4 py-3 bg-amber-50 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:bg-white transition-all border border-amber-200"
+                  />
+                  {gracePeriodMonthsNum > 0 && monthlyInterestOnly > 0 && (
+                    <p className="mt-1.5 text-xs text-amber-600 flex items-center gap-1">
+                      <span>💡 거치 기간 월 납부(이자만):</span>
+                      <span className="font-semibold">{monthlyInterestOnly.toLocaleString()}원/월</span>
+                    </p>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
         {/* 대출 원금 + 현재 남은 원금 */}
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -241,7 +325,7 @@ export function LoanForm({ onAdd, onUpdate, onClose, isOpen, editLoan, partnerNa
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              월 납부금 {loanType === 'equal_principal' ? '(현재 기준)' : ''}
+              {hasGracePeriod ? '월 납부금 (상환 기간)' : `월 납부금 ${loanType === 'equal_principal' ? '(현재 기준)' : ''}`}
             </label>
             <div className="relative">
               <Wallet className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -286,7 +370,9 @@ export function LoanForm({ onAdd, onUpdate, onClose, isOpen, editLoan, partnerNa
 
         {/* 총 납부 개월 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">총 상환 개월 수</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            총 상환 개월 수 {hasGracePeriod ? '(거치 기간 포함 전체)' : ''}
+          </label>
           <div className="relative">
             <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
@@ -298,6 +384,12 @@ export function LoanForm({ onAdd, onUpdate, onClose, isOpen, editLoan, partnerNa
               className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:bg-white transition-all"
             />
           </div>
+          {/* 거치 + 상환 기간 분할 표시 */}
+          {hasGracePeriod && gracePeriodMonthsNum > 0 && totalMonthsNum > 0 && (
+            <p className="mt-1.5 text-xs text-gray-500">
+              거치 {gracePeriodMonthsNum}개월 + 상환 {Math.max(0, totalMonthsNum - gracePeriodMonthsNum)}개월
+            </p>
+          )}
         </div>
 
         {/* 상환 진행률 preview */}
@@ -307,6 +399,26 @@ export function LoanForm({ onAdd, onUpdate, onClose, isOpen, editLoan, partnerNa
             animate={{ opacity: 1 }}
             className="p-4 bg-red-50 rounded-xl space-y-3"
           >
+            {/* 거치중/상환중 상태 배지 */}
+            {hasGracePeriod && (
+              <div className="flex items-center gap-2">
+                {isCurrentlyInGracePeriod() ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-100 text-amber-700 text-xs font-semibold">
+                    <Clock className="w-3 h-3" /> 현재 거치 중
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-100 text-green-700 text-xs font-semibold">
+                    ✅ 상환 중
+                  </span>
+                )}
+                {isCurrentlyInGracePeriod() && monthlyInterestOnly > 0 && (
+                  <span className="text-xs text-amber-600">
+                    현재 이자만 납부 중 ({monthlyInterestOnly.toLocaleString()}원/월)
+                  </span>
+                )}
+              </div>
+            )}
+
             <div className="flex justify-between text-sm">
               <span className="text-gray-600 font-medium">상환 진행률</span>
               <span className="font-bold text-red-600">{repayRatio.toFixed(1)}%</span>
@@ -329,13 +441,19 @@ export function LoanForm({ onAdd, onUpdate, onClose, isOpen, editLoan, partnerNa
                 <span className="text-gray-400">남은 원금</span>
                 <p className="font-semibold text-red-600">{remainingNum.toLocaleString()}원</p>
               </div>
-              {monthlyNum > 0 && (
+              {monthlyNum > 0 && !isCurrentlyInGracePeriod() && (
                 <div>
-                  <span className="text-gray-400">월 납부금</span>
+                  <span className="text-gray-400">월 납부금 (상환)</span>
                   <p className="font-semibold text-gray-800">{monthlyNum.toLocaleString()}원</p>
                 </div>
               )}
-              {estimatedMonthsLeft > 0 && (
+              {hasGracePeriod && monthlyInterestOnly > 0 && (
+                <div>
+                  <span className="text-gray-400">거치 기간 월 이자</span>
+                  <p className="font-semibold text-amber-600">{monthlyInterestOnly.toLocaleString()}원</p>
+                </div>
+              )}
+              {estimatedMonthsLeft > 0 && !isCurrentlyInGracePeriod() && (
                 <div>
                   <span className="text-gray-400">남은 기간 (추정)</span>
                   <p className="font-semibold text-gray-800">약 {estimatedMonthsLeft}개월</p>
@@ -344,7 +462,7 @@ export function LoanForm({ onAdd, onUpdate, onClose, isOpen, editLoan, partnerNa
             </div>
             {totalInterest > 0 && (
               <div className="pt-2 border-t border-red-100 flex justify-between text-xs">
-                <span className="text-gray-400">총 이자 예상 (원리금균등)</span>
+                <span className="text-gray-400">총 이자 예상{hasGracePeriod ? ' (거치 포함)' : ''}</span>
                 <span className="font-medium text-red-500">{totalInterest.toLocaleString()}원</span>
               </div>
             )}
