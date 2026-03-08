@@ -786,6 +786,7 @@ function App() {
 
               <div className="lg:col-span-4 space-y-4 sm:space-y-6">
                 <MonthlyHeatmap
+                  year={selectedYear}
                   monthlyData={yearlyData.monthlyData}
                   monthlyTargets={monthlyTargets}
                   onUpdateTarget={(month, target) => updateMonthlyTarget(selectedYear, month, target)}

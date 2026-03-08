@@ -5,12 +5,16 @@ import type { MonthlyData } from '@/types';
 import { useInView } from '@/hooks/useInView';
 
 interface MonthlyHeatmapProps {
+  year: number;
   monthlyData: MonthlyData[];
   monthlyTargets: Record<number, number>;
   onUpdateTarget: (month: number, target: number) => void;
 }
 
-export function MonthlyHeatmap({ monthlyData, monthlyTargets, onUpdateTarget }: MonthlyHeatmapProps) {
+export function MonthlyHeatmap({ year, monthlyData, monthlyTargets, onUpdateTarget }: MonthlyHeatmapProps) {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // 1~12
   const [ref, isInView] = useInView<HTMLDivElement>({ threshold: 0.2 });
   const [editingMonth, setEditingMonth] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -27,14 +31,14 @@ export function MonthlyHeatmap({ monthlyData, monthlyTargets, onUpdateTarget }: 
     }
   }, [editingMonth]);
 
-  const getStatusColor = (data: MonthlyData): string => {
-    if (data.netWorth === 0) return 'bg-gray-100 text-gray-400'; // Future
+  const getStatusColor = (data: MonthlyData, isFuture: boolean): string => {
+    if (isFuture) return 'bg-gray-100 text-gray-300 border-gray-200'; // Future
     if (data.targetAchieved) return 'bg-green-100 text-green-600 border-green-200'; // Success
     return 'bg-red-50 text-red-500 border-red-200'; // Failed
   };
 
-  const getStatusIcon = (data: MonthlyData) => {
-    if (data.netWorth === 0) return <Minus className="w-4 h-4" />;
+  const getStatusIcon = (data: MonthlyData, isFuture: boolean) => {
+    if (isFuture) return <Minus className="w-4 h-4" />;
     if (data.targetAchieved) return <Check className="w-4 h-4" />;
     return <X className="w-4 h-4" />;
   };
@@ -94,7 +98,10 @@ export function MonthlyHeatmap({ monthlyData, monthlyTargets, onUpdateTarget }: 
 
       <div className="grid grid-cols-4 gap-3">
         {monthlyData.map((data, index) => {
-          const isFuture = data.netWorth === 0;
+          // 현재 날짜 기준으로 미래 달 판별
+          const isFuture =
+            year > currentYear ||
+            (year === currentYear && data.month > currentMonth);
           const isEditing = editingMonth === data.month;
 
           return (
@@ -105,11 +112,12 @@ export function MonthlyHeatmap({ monthlyData, monthlyTargets, onUpdateTarget }: 
               transition={{ delay: index * 0.05 + 0.3 }}
               className={`
                 group relative aspect-square rounded-2xl flex flex-col items-center justify-center
-                border-2 transition-all duration-300 cursor-pointer
-                ${isEditing ? '' : 'hover:scale-105 hover:shadow-lg'}
-                ${getStatusColor(data)}
+                border-2 transition-all duration-300
+                ${isFuture ? 'cursor-default' : 'cursor-pointer'}
+                ${!isEditing && !isFuture ? 'hover:scale-105 hover:shadow-lg' : ''}
+                ${getStatusColor(data, isFuture)}
               `}
-              onClick={(e) => !isEditing && handleStartEdit(e, data)}
+              onClick={(e) => !isEditing && !isFuture && handleStartEdit(e, data)}
             >
               <span className="text-xs font-medium mb-1">{data.monthName}</span>
               <motion.div
@@ -117,20 +125,18 @@ export function MonthlyHeatmap({ monthlyData, monthlyTargets, onUpdateTarget }: 
                 animate={isInView ? { scale: 1 } : {}}
                 transition={{ delay: index * 0.05 + 0.5, type: "spring" }}
               >
-                {getStatusIcon(data)}
+                {getStatusIcon(data, isFuture)}
               </motion.div>
 
-              {/* Tooltip on hover - show target & actual */}
-              {!isEditing && (
+              {/* Tooltip on hover - 미래 달 제외 */}
+              {!isEditing && !isFuture && (
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">
                   <div className="flex flex-col gap-0.5">
                     <span>🎯 목표: {data.targetSavingsRate}%</span>
-                    {!isFuture && (
-                      <>
-                        <span>📊 실제: {data.savingsRate.toFixed(1)}%</span>
-                        <span>{data.targetAchieved ? '✅ 달성' : '❌ 미달성'}</span>
-                      </>
-                    )}
+                    <>
+                      <span>📊 실제: {data.savingsRate.toFixed(1)}%</span>
+                      <span>{data.targetAchieved ? '✅ 달성' : '❌ 미달성'}</span>
+                    </>
                     <span className="text-gray-400 text-[10px] mt-0.5 flex items-center gap-1">
                       <Pencil className="w-2.5 h-2.5" /> 클릭하여 목표 수정
                     </span>
