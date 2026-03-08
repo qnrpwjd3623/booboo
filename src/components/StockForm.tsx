@@ -78,7 +78,7 @@ export function StockForm({ onAdd, onUpdate, onClose, isOpen, editStock, partner
 
   // 티커 입력 시 자동 조회 (debounce 800ms)
   useEffect(() => {
-    if (!ticker || ticker.length < 4) {
+    if (!ticker || ticker.length < 1) {
       setFetchState('idle');
       setFetchedInfo(null);
       return;
@@ -242,7 +242,7 @@ export function StockForm({ onAdd, onUpdate, onClose, isOpen, editStock, partner
               {fetchState === 'loading' && <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />}
               {fetchState === 'success' && <CheckCircle className="w-5 h-5 text-green-500" />}
               {fetchState === 'error' && <AlertCircle className="w-5 h-5 text-red-400" />}
-              {fetchState === 'idle' && ticker.length >= 4 && (
+              {fetchState === 'idle' && ticker.length >= 1 && (
                 <button type="button" onClick={handleFetchPrice}>
                   <Search className="w-5 h-5 text-gray-400 hover:text-blue-500 transition-colors" />
                 </button>

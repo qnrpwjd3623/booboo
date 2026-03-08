@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Plus, Pencil, Trash2, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, ImagePlus, ArrowUp, ArrowDown } from 'lucide-react';
 import type { Transaction, CustomCategory } from '@/types';
 import { getCategoryIcon } from '@/constants/categories';
@@ -304,24 +304,23 @@ export function MonthlyTransactionView({
               </button>
             </div>
           ) : (
-            <LayoutGroup>
-              <div className="space-y-1">
-                <AnimatePresence initial={false}>
-                  {filteredTxns.map((txn) => (
-                    <TransactionItem
-                      key={txn.id}
-                      transaction={txn}
-                      onEdit={() => onEditTransaction(txn)}
-                      onDelete={() => {
-                        if (confirm('이 거래를 삭제하시겠습니까?')) {
-                          onDeleteTransaction(txn.id);
-                        }
-                      }}
-                    />
-                  ))}
-                </AnimatePresence>
-              </div>
-            </LayoutGroup>
+            <div className="space-y-1">
+              <AnimatePresence initial={false}>
+                {filteredTxns.map((txn, i) => (
+                  <TransactionItem
+                    key={`${txn.id}-${sortBy}-${sortDir}-${filterOwner}`}
+                    transaction={txn}
+                    index={i}
+                    onEdit={() => onEditTransaction(txn)}
+                    onDelete={() => {
+                      if (confirm('이 거래를 삭제하시겠습니까?')) {
+                        onDeleteTransaction(txn.id);
+                      }
+                    }}
+                  />
+                ))}
+              </AnimatePresence>
+            </div>
           )}
         </motion.div>
       </div>
@@ -332,10 +331,12 @@ export function MonthlyTransactionView({
 // ─── 개별 거래 아이템 ───────────────────────────────────────────────────────
 function TransactionItem({
   transaction,
+  index,
   onEdit,
   onDelete,
 }: {
   transaction: Transaction;
+  index: number;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -346,14 +347,13 @@ function TransactionItem({
 
   return (
     <motion.div
-      layout
-      layoutId={transaction.id}
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95 }}
+      exit={{ opacity: 0, y: -8, transition: { duration: 0.18 } }}
       transition={{
-        layout: { type: 'spring', stiffness: 400, damping: 35 },
-        opacity: { duration: 0.18 },
+        duration: 0.38,
+        delay: Math.min(index * 0.055, 0.5),
+        ease: [0.25, 0.46, 0.45, 0.94],
       }}
       className="flex items-center gap-3 px-3 py-3 rounded-2xl hover:bg-gray-50 transition-colors"
       onMouseEnter={() => setHovered(true)}
