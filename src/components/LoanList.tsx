@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { CreditCard, Percent, Calendar, Building2, ChevronDown, ChevronUp, Clock } from 'lucide-react';
+import { CreditCard, Percent, Calendar, Building2, ChevronDown, ChevronUp, Clock, Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { LoanItem } from '@/types';
 
@@ -174,7 +174,25 @@ export function LoanList({ loans, onEdit, onDelete }: LoanListProps) {
                     </p>
                     <p className="text-xs text-gray-400">남은 원금</p>
                   </div>
-                  <div className="shrink-0 self-center">
+                  {/* 수정 / 삭제 / 펼침 */}
+                  <div className="shrink-0 self-center flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onEdit(loan); }}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                      title="수정"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onDelete(loan.id); }}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                      title="삭제"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                    <div className="w-px h-4 bg-gray-200 mx-0.5" />
                     {isExpanded
                       ? <ChevronUp className="w-4 h-4 text-gray-400" />
                       : <ChevronDown className="w-4 h-4 text-gray-400" />
@@ -339,14 +357,6 @@ export function LoanList({ loans, onEdit, onDelete }: LoanListProps) {
                   {loan.memo && (
                     <p className="mt-2 text-xs text-gray-400 bg-gray-50 rounded-lg p-2">{loan.memo}</p>
                   )}
-                  <div className="mt-3 pt-3 border-t border-gray-100 flex gap-3">
-                    <button onClick={() => onEdit(loan)} className="text-xs text-blue-500 hover:underline font-medium">
-                      수정
-                    </button>
-                    <button onClick={() => onDelete(loan.id)} className="text-xs text-red-500 hover:underline font-medium">
-                      삭제
-                    </button>
-                  </div>
                 </motion.div>
               )}
             </motion.div>
