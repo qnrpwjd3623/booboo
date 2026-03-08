@@ -10,8 +10,14 @@ export interface StockPrice {
   lastUpdated: string;
 }
 
-// Yahoo Finance API (묶음 조회 지원)
-const YAHOO_FINANCE_API = 'https://query1.finance.yahoo.com/v8/finance/chart/';
+// Yahoo Finance API (CORS 프록시 경유)
+const YAHOO_FINANCE_API_BASE = 'https://query1.finance.yahoo.com/v8/finance/chart/';
+const CORS_PROXY = 'https://corsproxy.io/?url=';
+
+function buildApiUrl(ticker: string, queryParams = '?interval=1d&range=1d'): string {
+  const fullUrl = `${YAHOO_FINANCE_API_BASE}${ticker}${queryParams}`;
+  return `${CORS_PROXY}${encodeURIComponent(fullUrl)}`;
+}
 
 // 티커 매핑 (한국 주식)
 const KOREA_TICKER_MAP: Record<string, string> = {
@@ -35,7 +41,7 @@ export function isKoreanTicker(ticker: string): boolean {
 // USD/KRW 환율 조회
 export async function fetchUSDToKRW(): Promise<number> {
   try {
-    const response = await fetch(`${YAHOO_FINANCE_API}USDKRW=X?interval=1d&range=1d`);
+    const response = await fetch(buildApiUrl('USDKRW=X'));
     if (!response.ok) return 1350; // fallback
     const data = await response.json();
     const result = data.chart?.result?.[0];
@@ -77,7 +83,7 @@ function parseYahooChart(data: Record<string, unknown>, originalTicker: string):
 // 미국 주식 가격 조회 (달러 단위)
 export async function fetchUSStockPrice(ticker: string): Promise<StockPrice | null> {
   try {
-    const response = await fetch(`${YAHOO_FINANCE_API}${ticker.toUpperCase()}?interval=1d&range=1d`);
+    const response = await fetch(buildApiUrl(ticker.toUpperCase()));
     if (!response.ok) return null;
     const data = await response.json();
     return parseYahooChart(data, ticker.toUpperCase());
@@ -106,7 +112,7 @@ export async function fetchStockPrice(ticker: string): Promise<StockPrice | null
 
     // 한국 주식
     const yahooTicker = KOREA_TICKER_MAP[ticker] || `${ticker}.KS`;
-    const response = await fetch(`${YAHOO_FINANCE_API}${yahooTicker}?interval=1d&range=1d`);
+    const response = await fetch(buildApiUrl(yahooTicker));
 
     if (!response.ok) {
       throw new Error('Failed to fetch stock price');
