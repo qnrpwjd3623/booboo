@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, Pencil, Trash2, Search, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, ImagePlus, ArrowUp, ArrowDown } from 'lucide-react';
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
+import { ArrowLeft, Plus, Pencil, Trash2, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, ImagePlus, ArrowUp, ArrowDown } from 'lucide-react';
 import type { Transaction, CustomCategory } from '@/types';
 import { getCategoryIcon } from '@/constants/categories';
 import { PersonSpendingCard } from './PersonSpendingCard';
@@ -41,7 +41,6 @@ export function MonthlyTransactionView({
   customCategories,
 }: MonthlyTransactionViewProps) {
   const [filterOwner, setFilterOwner] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState('');
   const [isImageImportOpen, setIsImageImportOpen] = useState(false);
   const [sortBy, setSortBy] = useState<'date' | 'amount'>('date');
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
@@ -67,20 +66,12 @@ export function MonthlyTransactionView({
   const partner1Txns = monthTxns.filter((t) => t.owner === partnerNames[0]);
   const partner2Txns = monthTxns.filter((t) => t.owner === partnerNames[1]);
 
-  // 목록 필터 + 검색
+  // 목록 필터 + 정렬
   const filteredTxns = monthTxns
     .filter((t) => {
       if (filterOwner === 'all') return true;
       if (filterOwner === 'shared') return t.owner === 'shared';
       return t.owner === filterOwner;
-    })
-    .filter((t) => {
-      if (!searchQuery) return true;
-      const q = searchQuery.toLowerCase();
-      return (
-        t.category.toLowerCase().includes(q) ||
-        t.description.toLowerCase().includes(q)
-      );
     })
     .sort((a, b) => {
       const dir = sortDir === 'desc' ? -1 : 1;
@@ -251,7 +242,7 @@ export function MonthlyTransactionView({
             <h3 className="font-semibold text-gray-900">거래 내역</h3>
           </div>
 
-          {/* 필터 탭 + 정렬 + 검색 */}
+          {/* 필터 탭 + 정렬 */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
             {filterTabs.map((tab) => (
               <button
@@ -283,27 +274,20 @@ export function MonthlyTransactionView({
                     }`}
                   >
                     {label}
-                    {isActive &&
-                      (sortDir === 'desc' ? (
-                        <ArrowDown className="w-3 h-3" />
-                      ) : (
-                        <ArrowUp className="w-3 h-3" />
-                      ))}
+                    <motion.span
+                      key={isActive ? sortDir : 'inactive'}
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.15 }}
+                      className="inline-flex"
+                    >
+                      {isActive ? (
+                        sortDir === 'desc' ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />
+                      ) : null}
+                    </motion.span>
                   </button>
                 );
               })}
-            </div>
-
-            {/* 검색 */}
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="검색..."
-                className="pl-8 pr-3 py-1.5 bg-gray-50 rounded-xl text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500/20 w-32"
-              />
             </div>
           </div>
 
@@ -320,23 +304,24 @@ export function MonthlyTransactionView({
               </button>
             </div>
           ) : (
-            <div className="space-y-1">
-              <AnimatePresence initial={false}>
-                {filteredTxns.map((txn, i) => (
-                  <TransactionItem
-                    key={txn.id}
-                    transaction={txn}
-                    index={i}
-                    onEdit={() => onEditTransaction(txn)}
-                    onDelete={() => {
-                      if (confirm('이 거래를 삭제하시겠습니까?')) {
-                        onDeleteTransaction(txn.id);
-                      }
-                    }}
-                  />
-                ))}
-              </AnimatePresence>
-            </div>
+            <LayoutGroup>
+              <div className="space-y-1">
+                <AnimatePresence initial={false}>
+                  {filteredTxns.map((txn) => (
+                    <TransactionItem
+                      key={txn.id}
+                      transaction={txn}
+                      onEdit={() => onEditTransaction(txn)}
+                      onDelete={() => {
+                        if (confirm('이 거래를 삭제하시겠습니까?')) {
+                          onDeleteTransaction(txn.id);
+                        }
+                      }}
+                    />
+                  ))}
+                </AnimatePresence>
+              </div>
+            </LayoutGroup>
           )}
         </motion.div>
       </div>
@@ -347,12 +332,10 @@ export function MonthlyTransactionView({
 // ─── 개별 거래 아이템 ───────────────────────────────────────────────────────
 function TransactionItem({
   transaction,
-  index,
   onEdit,
   onDelete,
 }: {
   transaction: Transaction;
-  index: number;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -363,10 +346,15 @@ function TransactionItem({
 
   return (
     <motion.div
-      initial={{ opacity: 0, x: -12 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 12 }}
-      transition={{ delay: Math.min(index * 0.025, 0.3) }}
+      layout
+      layoutId={transaction.id}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{
+        layout: { type: 'spring', stiffness: 400, damping: 35 },
+        opacity: { duration: 0.18 },
+      }}
       className="flex items-center gap-3 px-3 py-3 rounded-2xl hover:bg-gray-50 transition-colors"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
