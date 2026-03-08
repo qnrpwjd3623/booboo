@@ -162,17 +162,6 @@ function NetWorthBreakdownCard({
           </p>
 
           <div className="space-y-2.5">
-            {/* Cash flow */}
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
-                <span className="text-xs text-gray-600">현금흐름</span>
-              </div>
-              <span className={`text-xs font-semibold tabular-nums ${breakdown.cash < 0 ? 'text-red-500' : 'text-gray-900'}`}>
-                {breakdown.cash >= 0 ? '+' : ''}{formatCurrency(breakdown.cash)}
-              </span>
-            </div>
-
             {/* Stocks — show individual items if available, otherwise aggregate */}
             {breakdown.stocks > 0 && (
               breakdown.stockItems && breakdown.stockItems.length > 0 ? (

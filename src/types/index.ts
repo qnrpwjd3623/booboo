@@ -49,7 +49,7 @@ export interface StockItem {
 // 금융상품 / 자산 (IRP, ISA, 연금저축, 펀드, 예금, 적금, 부동산)
 export interface FinancialProduct {
   id: string;
-  type: 'irp' | 'isa' | 'pension' | 'fund' | 'deposit' | 'savings' | 'realestate';
+  type: 'irp' | 'isa' | 'pension' | 'fund' | 'deposit' | 'savings' | 'realestate' | 'coin';
   name: string;
   company: string; // 증권사/은행명/주소(부동산)
   principal: number; // 원금/매입가/납입총액

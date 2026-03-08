@@ -27,18 +27,93 @@ const KOREA_TICKER_MAP: Record<string, string> = {
   '028260': '028260.KS', // 삼성물산
 };
 
-// 주식 가격 조회 (단일)
+// 티커가 숫자로만 구성되면 한국 주식 (종목코드)
+export function isKoreanTicker(ticker: string): boolean {
+  return /^\d+$/.test(ticker.trim());
+}
+
+// USD/KRW 환율 조회
+export async function fetchUSDToKRW(): Promise<number> {
+  try {
+    const response = await fetch(`${YAHOO_FINANCE_API}USDKRW=X?interval=1d&range=1d`);
+    if (!response.ok) return 1350; // fallback
+    const data = await response.json();
+    const result = data.chart?.result?.[0];
+    const quote = result?.indicators?.quote?.[0];
+    if (!quote?.close) return 1350;
+    const closes = quote.close.filter((v: number | null) => v != null);
+    return closes.length > 0 ? Math.round(closes[closes.length - 1]) : 1350;
+  } catch {
+    return 1350; // fallback rate
+  }
+}
+
+// Yahoo Finance 공통 파서
+function parseYahooChart(data: Record<string, unknown>, originalTicker: string): StockPrice | null {
+  const chart = data.chart as Record<string, unknown> | undefined;
+  const results = chart?.result as Array<Record<string, unknown>> | undefined;
+  if (!results?.[0]) return null;
+  const result = results[0];
+  const meta = result.meta as Record<string, unknown>;
+  const indicators = result.indicators as Record<string, unknown>;
+  const quote = (indicators?.quote as Array<Record<string, unknown>>)?.[0];
+  if (!quote?.close) return null;
+  const closes = (quote.close as (number | null)[]).filter((v) => v != null);
+  if (closes.length === 0) return null;
+  const currentPrice = closes[closes.length - 1];
+  const previousClose = (meta.previousClose as number) || (meta.regularMarketPreviousClose as number) || currentPrice;
+  const change = currentPrice - previousClose;
+  const changeRate = previousClose > 0 ? (change / previousClose) * 100 : 0;
+  return {
+    ticker: originalTicker,
+    name: (meta.shortName as string) || (meta.longName as string) || originalTicker,
+    currentPrice: Math.round(currentPrice),
+    change: Math.round(change),
+    changeRate: Number(changeRate.toFixed(2)),
+    lastUpdated: new Date().toISOString(),
+  };
+}
+
+// 미국 주식 가격 조회 (달러 단위)
+export async function fetchUSStockPrice(ticker: string): Promise<StockPrice | null> {
+  try {
+    const response = await fetch(`${YAHOO_FINANCE_API}${ticker.toUpperCase()}?interval=1d&range=1d`);
+    if (!response.ok) return null;
+    const data = await response.json();
+    return parseYahooChart(data, ticker.toUpperCase());
+  } catch (error) {
+    console.error('Error fetching US stock price:', error);
+    return null;
+  }
+}
+
+// 주식 가격 조회 (단일) — 한국/미국 자동 감지, 항상 KRW로 반환
 export async function fetchStockPrice(ticker: string): Promise<StockPrice | null> {
   try {
+    // 미국 주식: 환율 변환 후 KRW 반환
+    if (!isKoreanTicker(ticker)) {
+      const [usdPrice, krwRate] = await Promise.all([
+        fetchUSStockPrice(ticker),
+        fetchUSDToKRW(),
+      ]);
+      if (!usdPrice) return null;
+      return {
+        ...usdPrice,
+        currentPrice: Math.round(usdPrice.currentPrice * krwRate),
+        change: Math.round(usdPrice.change * krwRate),
+      };
+    }
+
+    // 한국 주식
     const yahooTicker = KOREA_TICKER_MAP[ticker] || `${ticker}.KS`;
     const response = await fetch(`${YAHOO_FINANCE_API}${yahooTicker}?interval=1d&range=1d`);
-    
+
     if (!response.ok) {
       throw new Error('Failed to fetch stock price');
     }
 
     const data = await response.json();
-    
+
     if (!data.chart?.result?.[0]) {
       return null;
     }
@@ -46,7 +121,7 @@ export async function fetchStockPrice(ticker: string): Promise<StockPrice | null
     const result = data.chart.result[0];
     const meta = result.meta;
     const quote = result.indicators?.quote?.[0];
-    
+
     if (!quote?.close?.[0]) {
       return null;
     }

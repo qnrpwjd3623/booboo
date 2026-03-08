@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Building2, Wallet, TrendingUp, Calendar, FileText,
-  PiggyBank, Landmark, Shield, BarChart3, Home, Percent
+  PiggyBank, Landmark, Shield, BarChart3, Home, Percent, Coins
 } from 'lucide-react';
 import { Modal } from './Modal';
 import type { FinancialProduct } from '@/types';
@@ -24,6 +24,7 @@ const productTypes = [
   { id: 'deposit',    name: '예금',   icon: Wallet,     color: 'bg-cyan-100 text-cyan-600',     group: 'deposit' },
   { id: 'savings',    name: '적금',   icon: PiggyBank,  color: 'bg-pink-100 text-pink-600',     group: 'savings' },
   { id: 'realestate', name: '부동산', icon: Home,       color: 'bg-amber-100 text-amber-600',   group: 'realestate' },
+  { id: 'coin',       name: '코인',   icon: Coins,      color: 'bg-yellow-100 text-yellow-600', group: 'investment' },
 ] as const;
 
 type ProductTypeId = typeof productTypes[number]['id'];
@@ -185,8 +186,8 @@ export function FinancialProductForm({
     onClose();
   };
 
-  const companyLabel = group === 'realestate' ? '위치/지역' : (group === 'investment' ? '증권사/은행' : '은행명');
-  const companyPlaceholder = group === 'realestate' ? '서울 강남구' : (group === 'investment' ? '삼성증권' : '국민은행');
+  const companyLabel = group === 'realestate' ? '위치/지역' : (type === 'coin' ? '거래소' : (group === 'investment' ? '증권사/은행' : '은행명'));
+  const companyPlaceholder = group === 'realestate' ? '서울 강남구' : (type === 'coin' ? '업비트' : (group === 'investment' ? '삼성증권' : '국민은행'));
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? '자산 수정' : '자산 추가'} maxWidth="max-w-md">
@@ -251,7 +252,7 @@ export function FinancialProductForm({
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder={group === 'realestate' ? '역삼 롯데캐슬' : '상품명'}
+                placeholder={group === 'realestate' ? '역삼 롯데캐슬' : type === 'coin' ? '비트코인' : '상품명'}
                 className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
               />
             </div>
