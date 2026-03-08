@@ -74,10 +74,19 @@ function parseYahooChart(data: Record<string, unknown>, originalTicker: string):
   const meta = result.meta as Record<string, unknown>;
   const indicators = result.indicators as Record<string, unknown>;
   const quote = (indicators?.quote as Array<Record<string, unknown>>)?.[0];
-  if (!quote?.close) return null;
-  const closes = (quote.close as (number | null)[]).filter((v) => v != null);
-  if (closes.length === 0) return null;
-  const currentPrice = closes[closes.length - 1];
+
+  // close 배열에서 유효한 값 추출, 없으면 meta.regularMarketPrice 로 폴백
+  const closes = quote?.close
+    ? (quote.close as (number | null)[]).filter((v) => v != null)
+    : [];
+
+  const currentPrice: number =
+    closes.length > 0
+      ? closes[closes.length - 1]
+      : (meta.regularMarketPrice as number) || 0;
+
+  if (!currentPrice) return null;
+
   const previousClose =
     (meta.previousClose as number) ||
     (meta.regularMarketPreviousClose as number) ||
