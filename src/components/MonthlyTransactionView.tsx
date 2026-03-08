@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, Pencil, Trash2, Search, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, ImagePlus } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, Search, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, ImagePlus, ArrowUp, ArrowDown } from 'lucide-react';
 import type { Transaction, CustomCategory } from '@/types';
 import { getCategoryIcon } from '@/constants/categories';
 import { PersonSpendingCard } from './PersonSpendingCard';
@@ -43,6 +43,17 @@ export function MonthlyTransactionView({
   const [filterOwner, setFilterOwner] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isImageImportOpen, setIsImageImportOpen] = useState(false);
+  const [sortBy, setSortBy] = useState<'date' | 'amount'>('date');
+  const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
+
+  const handleSortClick = (type: 'date' | 'amount') => {
+    if (sortBy === type) {
+      setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'));
+    } else {
+      setSortBy(type);
+      setSortDir('desc');
+    }
+  };
 
   // 이 달 트랜잭션만
   const monthTxns = transactions.filter((t) => t.year === year && t.month === month);
@@ -71,7 +82,11 @@ export function MonthlyTransactionView({
         t.description.toLowerCase().includes(q)
       );
     })
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    .sort((a, b) => {
+      const dir = sortDir === 'desc' ? -1 : 1;
+      if (sortBy === 'amount') return dir * (a.amount - b.amount);
+      return dir * (new Date(a.date).getTime() - new Date(b.date).getTime());
+    });
 
   const filterTabs = [
     { id: 'all', label: '전체' },
@@ -236,7 +251,7 @@ export function MonthlyTransactionView({
             <h3 className="font-semibold text-gray-900">거래 내역</h3>
           </div>
 
-          {/* 필터 탭 + 검색 */}
+          {/* 필터 탭 + 정렬 + 검색 */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
             {filterTabs.map((tab) => (
               <button
@@ -251,7 +266,36 @@ export function MonthlyTransactionView({
                 {tab.label}
               </button>
             ))}
-            <div className="relative ml-auto">
+
+            {/* 정렬 버튼 */}
+            <div className="flex items-center gap-1 ml-auto">
+              {(['date', 'amount'] as const).map((type) => {
+                const isActive = sortBy === type;
+                const label = type === 'date' ? '날짜순' : '금액순';
+                return (
+                  <button
+                    key={type}
+                    onClick={() => handleSortClick(type)}
+                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                      isActive
+                        ? 'bg-gray-800 text-white shadow-sm'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    {label}
+                    {isActive &&
+                      (sortDir === 'desc' ? (
+                        <ArrowDown className="w-3 h-3" />
+                      ) : (
+                        <ArrowUp className="w-3 h-3" />
+                      ))}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* 검색 */}
+            <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
               <input
                 type="text"
