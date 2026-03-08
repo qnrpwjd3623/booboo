@@ -162,31 +162,17 @@ function NetWorthBreakdownCard({
           </p>
 
           <div className="space-y-2.5">
-            {/* Stocks — show individual items if available, otherwise aggregate */}
+            {/* Stocks — always show as single aggregated line */}
             {breakdown.stocks > 0 && (
-              breakdown.stockItems && breakdown.stockItems.length > 0 ? (
-                breakdown.stockItems.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-orange-400 flex-shrink-0" />
-                      <span className="text-xs text-gray-600 truncate max-w-[100px]">{item.name}</span>
-                    </div>
-                    <span className="text-xs font-semibold tabular-nums text-gray-900">
-                      +{formatCurrency(item.value)}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-orange-400 flex-shrink-0" />
-                    <span className="text-xs text-gray-600">주식</span>
-                  </div>
-                  <span className="text-xs font-semibold tabular-nums text-gray-900">
-                    +{formatCurrency(breakdown.stocks)}
-                  </span>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-orange-400 flex-shrink-0" />
+                  <span className="text-xs text-gray-600">주식</span>
                 </div>
-              )
+                <span className="text-xs font-semibold tabular-nums text-gray-900">
+                  +{formatCurrency(breakdown.stocks)}
+                </span>
+              </div>
             )}
 
             {/* Financial products — show individual items if available, otherwise aggregate */}
