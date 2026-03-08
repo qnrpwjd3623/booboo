@@ -4,11 +4,18 @@ import { useInView } from '@/hooks/useInView';
 import { TrendingUp, TrendingDown, Minus, Wallet, Target, PiggyBank } from 'lucide-react';
 import { formatCurrency, calculateGrowthRate } from '@/utils/format';
 
+interface NetWorthBreakdownItem {
+  name: string;
+  value: number;
+}
+
 interface NetWorthBreakdown {
   cash: number;
   stocks: number;
   products: number;
   debt: number;
+  stockItems?: NetWorthBreakdownItem[];
+  productItems?: NetWorthBreakdownItem[];
 }
 
 interface SummaryCardsProps {
@@ -166,30 +173,58 @@ function NetWorthBreakdownCard({
               </span>
             </div>
 
-            {/* Stocks */}
+            {/* Stocks — show individual items if available, otherwise aggregate */}
             {breakdown.stocks > 0 && (
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-orange-400 flex-shrink-0" />
-                  <span className="text-xs text-gray-600">주식</span>
+              breakdown.stockItems && breakdown.stockItems.length > 0 ? (
+                breakdown.stockItems.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-orange-400 flex-shrink-0" />
+                      <span className="text-xs text-gray-600 truncate max-w-[100px]">{item.name}</span>
+                    </div>
+                    <span className="text-xs font-semibold tabular-nums text-gray-900">
+                      +{formatCurrency(item.value)}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-orange-400 flex-shrink-0" />
+                    <span className="text-xs text-gray-600">주식</span>
+                  </div>
+                  <span className="text-xs font-semibold tabular-nums text-gray-900">
+                    +{formatCurrency(breakdown.stocks)}
+                  </span>
                 </div>
-                <span className="text-xs font-semibold tabular-nums text-gray-900">
-                  +{formatCurrency(breakdown.stocks)}
-                </span>
-              </div>
+              )
             )}
 
-            {/* Financial products */}
+            {/* Financial products — show individual items if available, otherwise aggregate */}
             {breakdown.products > 0 && (
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-purple-400 flex-shrink-0" />
-                  <span className="text-xs text-gray-600">금융상품</span>
+              breakdown.productItems && breakdown.productItems.length > 0 ? (
+                breakdown.productItems.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-purple-400 flex-shrink-0" />
+                      <span className="text-xs text-gray-600 truncate max-w-[100px]">{item.name}</span>
+                    </div>
+                    <span className="text-xs font-semibold tabular-nums text-gray-900">
+                      +{formatCurrency(item.value)}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-purple-400 flex-shrink-0" />
+                    <span className="text-xs text-gray-600">금융상품</span>
+                  </div>
+                  <span className="text-xs font-semibold tabular-nums text-gray-900">
+                    +{formatCurrency(breakdown.products)}
+                  </span>
                 </div>
-                <span className="text-xs font-semibold tabular-nums text-gray-900">
-                  +{formatCurrency(breakdown.products)}
-                </span>
-              </div>
+              )
             )}
 
             {/* Debt */}

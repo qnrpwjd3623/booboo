@@ -736,6 +736,12 @@ function App() {
                 const nwProducts = yearlyData.financialProducts.reduce((s, p) => s + p.currentValue, 0);
                 const nwDebt = yearlyData.loanDebt;
                 const nwCash = yearlyData.currentNetWorth - nwStocks - nwProducts + nwDebt;
+                const stockItems = yearlyData.stocks
+                  .filter(i => i.shares * i.currentPrice > 0)
+                  .map(i => ({ name: i.name, value: i.shares * i.currentPrice }));
+                const productItems = yearlyData.financialProducts
+                  .filter(p => p.currentValue > 0)
+                  .map(p => ({ name: p.name, value: p.currentValue }));
                 return (
                   <SummaryCards
                     currentNetWorth={yearlyData.currentNetWorth}
@@ -743,7 +749,7 @@ function App() {
                     averageSavingsRate={yearlyData.averageSavingsRate}
                     previousNetWorth={yearlyData.monthlyData.find(m => m.month === currentMonth - 1)?.netWorth}
                     totalLoan={nwDebt}
-                    netWorthBreakdown={{ cash: nwCash, stocks: nwStocks, products: nwProducts, debt: nwDebt }}
+                    netWorthBreakdown={{ cash: nwCash, stocks: nwStocks, products: nwProducts, debt: nwDebt, stockItems, productItems }}
                   />
                 );
               })()}
