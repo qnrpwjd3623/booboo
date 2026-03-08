@@ -731,13 +731,22 @@ function App() {
 
             {/* Summary Cards */}
             <div className="mb-6 sm:mb-8">
-              <SummaryCards
-                currentNetWorth={yearlyData.currentNetWorth}
-                targetNetWorth={yearlyData.targetNetWorth}
-                averageSavingsRate={yearlyData.averageSavingsRate}
-                previousNetWorth={yearlyData.monthlyData.find(m => m.month === currentMonth - 1)?.netWorth}
-                totalLoan={yearlyData.loanDebt}
-              />
+              {(() => {
+                const nwStocks = yearlyData.stocks.reduce((s, i) => s + i.shares * i.currentPrice, 0);
+                const nwProducts = yearlyData.financialProducts.reduce((s, p) => s + p.currentValue, 0);
+                const nwDebt = yearlyData.loanDebt;
+                const nwCash = yearlyData.currentNetWorth - nwStocks - nwProducts + nwDebt;
+                return (
+                  <SummaryCards
+                    currentNetWorth={yearlyData.currentNetWorth}
+                    targetNetWorth={yearlyData.targetNetWorth}
+                    averageSavingsRate={yearlyData.averageSavingsRate}
+                    previousNetWorth={yearlyData.monthlyData.find(m => m.month === currentMonth - 1)?.netWorth}
+                    totalLoan={nwDebt}
+                    netWorthBreakdown={{ cash: nwCash, stocks: nwStocks, products: nwProducts, debt: nwDebt }}
+                  />
+                );
+              })()}
             </div>
 
             {/* Main Grid */}
