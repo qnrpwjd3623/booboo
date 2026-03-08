@@ -131,7 +131,10 @@ const defaultProfile: CoupleProfile = {
 function App() {
   const { user, isLoading: authLoading, signIn, signOut } = useAuth();
 
-  const [selectedYear, setSelectedYear] = useState(2025);
+  const [selectedYear, setSelectedYear] = useState(() => {
+    const saved = localStorage.getItem('booboo_selected_year');
+    return saved ? parseInt(saved, 10) : new Date().getFullYear();
+  });
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -231,6 +234,11 @@ function App() {
       monthlyTargets
     );
   }, [selectedYear, transactions, stocks, financialProducts, loans, settings, monthlyTargets, getYearlySettings]);
+
+  // 선택 연도 localStorage 저장 (새로고침/재로그인 시 복원)
+  useEffect(() => {
+    localStorage.setItem('booboo_selected_year', String(selectedYear));
+  }, [selectedYear]);
 
   const currentMonth = new Date().getMonth() + 1;
   const monthsLeft = 12 - currentMonth;
