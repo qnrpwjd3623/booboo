@@ -128,6 +128,16 @@ const defaultProfile: CoupleProfile = {
   coupleName: '우리 가계부',
 };
 
+// 한국어 조사: 이름 끝 글자 받침 유무에 따라 '와'/'과' 반환
+function waGwa(name: string): string {
+  if (!name) return '와';
+  const code = name.charCodeAt(name.length - 1);
+  if (code >= 0xAC00 && code <= 0xD7A3) {
+    return (code - 0xAC00) % 28 === 0 ? '와' : '과';
+  }
+  return '와';
+}
+
 function App() {
   const { user, isLoading: authLoading, signIn, signOut } = useAuth();
 
@@ -677,7 +687,7 @@ function App() {
                 {selectedYear}년, 함께 만드는 자산 🎯
               </h2>
               <p className="text-sm sm:text-base text-gray-500">
-                {profile.partner1.name}와 {profile.partner2.name}, 연속 {yearlyData.streak}개월 달성 중! 💪
+                {profile.partner1.name}{waGwa(profile.partner1.name)} {profile.partner2.name}, 연속 {yearlyData.streak}개월 달성 중! 💪
               </p>
             </motion.div>
 
