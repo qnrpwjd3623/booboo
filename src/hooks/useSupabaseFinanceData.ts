@@ -240,8 +240,14 @@ export function useSupabaseFinanceData() {
     }, []);
 
     const loadCoupleProfile = async () => {
-        const { data, error } = await supabase.from('couple_profiles').select('*').limit(1).single();
-        if (error || !data) return;
+        const { data: rows } = await supabase.from('couple_profiles').select('*').order('created_at', { ascending: true });
+        if (!rows || rows.length === 0) return;
+        const data = rows[0];
+        // 중복 행 정리: 첫 번째 행만 남기고 나머지 삭제
+        if (rows.length > 1) {
+            const extraIds = rows.slice(1).map((r: { id: string }) => r.id);
+            await supabase.from('couple_profiles').delete().in('id', extraIds);
+        }
         setCoupleProfile({
             partner1Name: data.partner1_name || '파트너1',
             partner1Avatar: data.partner1_avatar || '',
@@ -272,7 +278,14 @@ export function useSupabaseFinanceData() {
         await renameOwner(coupleProfile.partner1Name, newProfile.partner1Name);
         await renameOwner(coupleProfile.partner2Name, newProfile.partner2Name);
 
-        const { data: existing } = await supabase.from('couple_profiles').select('id').limit(1).single();
+        // SELECT without .single() to avoid errors on 0 or 2+ rows
+        const { data: allRows } = await supabase.from('couple_profiles').select('id').order('created_at', { ascending: true });
+        const existingId = allRows?.[0]?.id ?? null;
+        // 중복 행 정리
+        if (allRows && allRows.length > 1) {
+            const extraIds = allRows.slice(1).map((r: { id: string }) => r.id);
+            await supabase.from('couple_profiles').delete().in('id', extraIds);
+        }
         const row = {
             partner1_name: newProfile.partner1Name,
             partner1_avatar: newProfile.partner1Avatar,
@@ -283,8 +296,8 @@ export function useSupabaseFinanceData() {
             couple_name: newProfile.coupleName,
             updated_at: new Date().toISOString(),
         };
-        if (existing?.id) {
-            const { error } = await supabase.from('couple_profiles').update(row).eq('id', existing.id);
+        if (existingId) {
+            const { error } = await supabase.from('couple_profiles').update(row).eq('id', existingId);
             if (error) { console.error('Update couple profile error:', error); return; }
         } else {
             const { error } = await supabase.from('couple_profiles').insert(row);
