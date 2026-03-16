@@ -268,20 +268,18 @@ export function TransactionForm({
               }
 
               return (
-                <div key={cat.id}
-                  className={`group flex items-center rounded-xl transition-all ${isSelected ? accentBg : 'bg-gray-100 hover:bg-gray-200'}`}>
+                <div key={cat.id} className="group relative">
                   <button type="button" onClick={() => setCategory(cat.id)}
-                    className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${isSelected ? accentText : 'text-gray-600'}`}>
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${isSelected ? accentBg + ' ' + accentText : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                     <span>{displayIcon}</span>
                     <span>{cat.label}</span>
                   </button>
-                  {/* 이모지 편집 버튼 — hover 시 부드럽게 확장 */}
-                  <div className="max-w-0 overflow-hidden group-hover:max-w-[2rem] transition-all duration-200 flex items-center">
-                    <button type="button" onClick={(e) => handleStartEditBuiltin(cat.id, displayIcon, e)}
-                      className="p-1 mr-1 text-gray-400 hover:text-blue-500 transition-colors" title="이모지 수정">
-                      <Pencil className="w-3 h-3" />
-                    </button>
-                  </div>
+                  {/* 이모지 편집 배지 — 크기 변화 없이 opacity만 토글 */}
+                  <button type="button" onClick={(e) => handleStartEditBuiltin(cat.id, displayIcon, e)}
+                    className="absolute -top-1.5 -right-1.5 w-4 h-4 flex items-center justify-center bg-white rounded-full shadow-sm border border-gray-200 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity duration-150 z-10"
+                    title="이모지 수정">
+                    <Pencil className="w-2.5 h-2.5 text-gray-500" />
+                  </button>
                 </div>
               );
             })}
@@ -313,22 +311,21 @@ export function TransactionForm({
               }
 
               return (
-                <div key={cat.id}
-                  className={`group flex items-center rounded-xl transition-all ${isSelected ? accentBg : 'bg-gray-100 hover:bg-gray-200'}`}>
+                <div key={cat.id} className="group relative">
                   <button type="button" onClick={() => setCategory(cat.name)}
-                    className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${isSelected ? accentText : 'text-gray-600'}`}>
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${isSelected ? accentBg + ' ' + accentText : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                     <span>{cat.icon || '📌'}</span>
                     <span>{cat.name}</span>
                   </button>
-                  {/* 편집/삭제 버튼 — hover 시 부드럽게 확장 */}
-                  <div className="max-w-0 overflow-hidden group-hover:max-w-[3.5rem] transition-all duration-200 flex items-center">
+                  {/* 편집/삭제 배지 — 크기 변화 없이 opacity만 토글 */}
+                  <div className="absolute -top-1.5 -right-1.5 flex gap-0.5 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity duration-150 z-10">
                     <button type="button" onClick={(e) => handleStartEditCustom(cat, e)}
-                      className="p-1 text-gray-400 hover:text-blue-500 transition-colors" title="수정">
-                      <Pencil className="w-3 h-3" />
+                      className="w-4 h-4 flex items-center justify-center bg-white rounded-full shadow-sm border border-gray-200" title="수정">
+                      <Pencil className="w-2.5 h-2.5 text-gray-500" />
                     </button>
                     <button type="button" onClick={(e) => handleDeleteCustom(cat, e)}
-                      className="p-1 mr-1 text-gray-400 hover:text-red-500 transition-colors" title="삭제">
-                      <Trash2 className="w-3 h-3" />
+                      className="w-4 h-4 flex items-center justify-center bg-white rounded-full shadow-sm border border-red-200" title="삭제">
+                      <Trash2 className="w-2.5 h-2.5 text-red-400" />
                     </button>
                   </div>
                 </div>
