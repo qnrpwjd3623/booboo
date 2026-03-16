@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Plus, Pencil, Trash2, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, ImagePlus, ArrowUp, ArrowDown } from 'lucide-react';
 import type { Transaction, CustomCategory } from '@/types';
-import { getCategoryIcon, EXPENSE_CATEGORIES } from '@/constants/categories';
+import { getCategoryIcon } from '@/constants/categories';
 import { PersonSpendingCard } from './PersonSpendingCard';
 import { ImageImportModal } from './ImageImportModal';
 
