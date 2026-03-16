@@ -253,16 +253,34 @@ export function useSupabaseFinanceData() {
         });
     };
 
-    const updateCoupleProfile = useCallback(async (profile: CoupleProfileDb) => {
+    const updateCoupleProfile = useCallback(async (newProfile: CoupleProfileDb) => {
+        // 이름이 바뀌면 모든 테이블의 owner 값을 새 이름으로 일괄 업데이트
+        const ownerTables = ['transactions', 'stocks', 'financial_products', 'loans'] as const;
+
+        const renameOwner = async (oldName: string, newName: string) => {
+            if (!oldName || oldName === newName) return;
+            for (const table of ownerTables) {
+                await supabase.from(table).update({ owner: newName }).eq('owner', oldName);
+            }
+            // 로컬 상태도 즉시 반영
+            setTransactions(prev => prev.map(t => t.owner === oldName ? { ...t, owner: newName } : t));
+            setStocks(prev => prev.map(s => s.owner === oldName ? { ...s, owner: newName } : s));
+            setFinancialProducts(prev => prev.map(p => p.owner === oldName ? { ...p, owner: newName } : p));
+            setLoans(prev => prev.map(l => l.owner === oldName ? { ...l, owner: newName } : l));
+        };
+
+        await renameOwner(coupleProfile.partner1Name, newProfile.partner1Name);
+        await renameOwner(coupleProfile.partner2Name, newProfile.partner2Name);
+
         const { data: existing } = await supabase.from('couple_profiles').select('id').limit(1).single();
         const row = {
-            partner1_name: profile.partner1Name,
-            partner1_avatar: profile.partner1Avatar,
-            partner1_emoji: profile.partner1Emoji,
-            partner2_name: profile.partner2Name,
-            partner2_avatar: profile.partner2Avatar,
-            partner2_emoji: profile.partner2Emoji,
-            couple_name: profile.coupleName,
+            partner1_name: newProfile.partner1Name,
+            partner1_avatar: newProfile.partner1Avatar,
+            partner1_emoji: newProfile.partner1Emoji,
+            partner2_name: newProfile.partner2Name,
+            partner2_avatar: newProfile.partner2Avatar,
+            partner2_emoji: newProfile.partner2Emoji,
+            couple_name: newProfile.coupleName,
             updated_at: new Date().toISOString(),
         };
         if (existing?.id) {
@@ -272,8 +290,8 @@ export function useSupabaseFinanceData() {
             const { error } = await supabase.from('couple_profiles').insert(row);
             if (error) { console.error('Insert couple profile error:', error); return; }
         }
-        setCoupleProfile(profile);
-    }, []);
+        setCoupleProfile(newProfile);
+    }, [coupleProfile]);
 
     const loadAllData = async () => {
         setIsLoading(true);
