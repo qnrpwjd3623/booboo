@@ -81,9 +81,9 @@ export function MonthlyTransactionView({
 
   const filterTabs = [
     { id: 'all', label: '전체' },
-    { id: 'shared', label: '공동' },
     { id: partnerNames[0], label: partnerNames[0] },
     { id: partnerNames[1], label: partnerNames[1] },
+    { id: 'shared', label: '공동' },
   ];
 
   // 카테고리 요약: 공동/전체 탭은 두 사람 합산, 개인 탭은 해당 사람만
