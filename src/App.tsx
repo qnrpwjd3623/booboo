@@ -88,7 +88,7 @@ function generateYearlyData(
     .filter(t => t.year === year && t.type === 'expense')
     .reduce((sum, t) => sum + t.amount, 0);
   const currentAmount = yearlyIncome - yearlyExpense;
-  const targetAmount = targetNetWorth - startNetWorth;
+  const targetAmount = targetNetWorth; // 연간 목표는 저축 목표액 자체 (startNetWorth 미차감)
 
   let streak = 0;
   for (let i = monthlyData.length - 1; i >= 0; i--) {
@@ -609,15 +609,13 @@ function App() {
                     setIsMobileMenuOpen(false);
                   }}
                 />
-                <div className="overflow-x-auto">
-                  <MonthSelector
-                    selectedMonth={selectedMonth}
-                    onMonthChange={(month) => {
-                      setSelectedMonth(month);
-                      setIsMobileMenuOpen(false);
-                    }}
-                  />
-                </div>
+                <MonthSelector
+                  selectedMonth={selectedMonth}
+                  onMonthChange={(month) => {
+                    setSelectedMonth(month);
+                    setIsMobileMenuOpen(false);
+                  }}
+                />
               </div>
             </motion.div>
           )}
