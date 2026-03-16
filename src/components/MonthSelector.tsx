@@ -10,7 +10,7 @@ interface MonthSelectorProps {
 
 export function MonthSelector({ selectedMonth, onMonthChange }: MonthSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [dropdownPos, setDropdownPos] = useState({ top: 0, right: 0 });
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
   const btnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -26,9 +26,15 @@ export function MonthSelector({ selectedMonth, onMonthChange }: MonthSelectorPro
   const handleOpen = () => {
     if (btnRef.current) {
       const rect = btnRef.current.getBoundingClientRect();
+      const dropdownWidth = 208; // w-52
+      // Left-align with button, but clamp so it stays within viewport
+      let left = rect.left;
+      if (left + dropdownWidth > window.innerWidth - 8) {
+        left = window.innerWidth - dropdownWidth - 8;
+      }
       setDropdownPos({
         top: rect.bottom + window.scrollY + 8,
-        right: window.innerWidth - rect.right,
+        left: Math.max(8, left),
       });
     }
     setIsOpen((prev) => !prev);
@@ -80,7 +86,7 @@ export function MonthSelector({ selectedMonth, onMonthChange }: MonthSelectorPro
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: -4 }}
               transition={{ duration: 0.15 }}
-              style={{ top: dropdownPos.top, right: dropdownPos.right }}
+              style={{ top: dropdownPos.top, left: dropdownPos.left }}
               className="fixed bg-white rounded-2xl shadow-xl border border-gray-100 p-3 z-[9999] w-52"
             >
               <p className="text-xs text-gray-400 font-medium mb-2 px-1">월간 거래 관리</p>

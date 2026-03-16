@@ -2,6 +2,26 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/services/supabaseClient';
 import type { Transaction, StockItem, FinancialProduct, LoanItem, CustomCategory, TransactionType } from '@/types';
 
+export interface CoupleProfileDb {
+    partner1Name: string;
+    partner1Avatar: string;
+    partner1Emoji: string;
+    partner2Name: string;
+    partner2Avatar: string;
+    partner2Emoji: string;
+    coupleName: string;
+}
+
+const DEFAULT_PROFILE: CoupleProfileDb = {
+    partner1Name: '파트너1',
+    partner1Avatar: '',
+    partner1Emoji: '👨',
+    partner2Name: '파트너2',
+    partner2Avatar: '',
+    partner2Emoji: '👩',
+    coupleName: '우리 가계부',
+};
+
 // ========== DB ↔ App 타입 변환 ==========
 interface DbTransaction {
     id: string;
@@ -211,11 +231,48 @@ export function useSupabaseFinanceData() {
     const [loans, setLoans] = useState<LoanItem[]>([]);
     const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
     const [yearlySettings, setYearlySettings] = useState<Record<number, { targetNetWorth: number; startNetWorth: number; monthlyTargets?: Record<number, number> }>>({});
+    const [coupleProfile, setCoupleProfile] = useState<CoupleProfileDb>(DEFAULT_PROFILE);
     const [isLoading, setIsLoading] = useState(true);
 
     // ========== 초기 데이터 로드 ==========
     useEffect(() => {
         loadAllData();
+    }, []);
+
+    const loadCoupleProfile = async () => {
+        const { data, error } = await supabase.from('couple_profiles').select('*').limit(1).single();
+        if (error || !data) return;
+        setCoupleProfile({
+            partner1Name: data.partner1_name || '파트너1',
+            partner1Avatar: data.partner1_avatar || '',
+            partner1Emoji: data.partner1_emoji || '👨',
+            partner2Name: data.partner2_name || '파트너2',
+            partner2Avatar: data.partner2_avatar || '',
+            partner2Emoji: data.partner2_emoji || '👩',
+            coupleName: data.couple_name || '우리 가계부',
+        });
+    };
+
+    const updateCoupleProfile = useCallback(async (profile: CoupleProfileDb) => {
+        const { data: existing } = await supabase.from('couple_profiles').select('id').limit(1).single();
+        const row = {
+            partner1_name: profile.partner1Name,
+            partner1_avatar: profile.partner1Avatar,
+            partner1_emoji: profile.partner1Emoji,
+            partner2_name: profile.partner2Name,
+            partner2_avatar: profile.partner2Avatar,
+            partner2_emoji: profile.partner2Emoji,
+            couple_name: profile.coupleName,
+            updated_at: new Date().toISOString(),
+        };
+        if (existing?.id) {
+            const { error } = await supabase.from('couple_profiles').update(row).eq('id', existing.id);
+            if (error) { console.error('Update couple profile error:', error); return; }
+        } else {
+            const { error } = await supabase.from('couple_profiles').insert(row);
+            if (error) { console.error('Insert couple profile error:', error); return; }
+        }
+        setCoupleProfile(profile);
     }, []);
 
     const loadAllData = async () => {
@@ -228,6 +285,7 @@ export function useSupabaseFinanceData() {
                 loadYearlySettings(),
                 loadLoans(),
                 loadCustomCategories(),
+                loadCoupleProfile(),
             ]);
         } catch (error) {
             console.error('Failed to load data:', error);
@@ -802,6 +860,10 @@ export function useSupabaseFinanceData() {
         addCustomCategory,
         updateCustomCategory,
         deleteCustomCategory,
+
+        // Couple profile
+        coupleProfile,
+        updateCoupleProfile,
 
         // Refresh
         refreshData: loadAllData,

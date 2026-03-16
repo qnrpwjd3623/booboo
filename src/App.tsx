@@ -122,12 +122,6 @@ function generateYearlyData(
   };
 }
 
-const defaultProfile: CoupleProfile = {
-  partner1: { name: '파트너1', avatar: '', emoji: '👨' },
-  partner2: { name: '파트너2', avatar: '', emoji: '👩' },
-  coupleName: '우리 가계부',
-};
-
 // 한국어 조사: 이름 끝 글자 받침 유무에 따라 '와'/'과' 반환
 function waGwa(name: string): string {
   if (!name) return '와';
@@ -150,7 +144,6 @@ function App() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isGoalOpen, setIsGoalOpen] = useState(false);
 
-  const [profile, setProfile] = useLocalStorage<CoupleProfile>('couple-profile', defaultProfile);
   const [stockPrices, setStockPrices] = useState<Record<string, { currentPrice: number }>>({});
   const [botMessage, setBotMessage] = useLocalStorage<BotMessage | null>('booboo_bot_message', null);
   const [monthlyChallenge, setMonthlyChallenge] = useLocalStorage<Challenge | null>('booboo_monthly_challenge', null);
@@ -210,7 +203,28 @@ function App() {
     updateYearlySettings,
     updateMonthlyTarget,
     getMonthlyTargets,
+    coupleProfile,
+    updateCoupleProfile,
   } = useSupabaseFinanceData();
+
+  // couple profile — DB에서 로드, 변경 시 DB에 저장 (기기간 동기화)
+  const profile: CoupleProfile = {
+    partner1: { name: coupleProfile.partner1Name, avatar: coupleProfile.partner1Avatar, emoji: coupleProfile.partner1Emoji },
+    partner2: { name: coupleProfile.partner2Name, avatar: coupleProfile.partner2Avatar, emoji: coupleProfile.partner2Emoji },
+    coupleName: coupleProfile.coupleName,
+  };
+  const setProfile = (next: CoupleProfile | ((prev: CoupleProfile) => CoupleProfile)) => {
+    const resolved = typeof next === 'function' ? next(profile) : next;
+    updateCoupleProfile({
+      partner1Name: resolved.partner1.name,
+      partner1Avatar: resolved.partner1.avatar,
+      partner1Emoji: resolved.partner1.emoji,
+      partner2Name: resolved.partner2.name,
+      partner2Avatar: resolved.partner2.avatar,
+      partner2Emoji: resolved.partner2.emoji,
+      coupleName: resolved.coupleName,
+    });
+  };
 
   const settings = getYearlySettings(selectedYear);
 

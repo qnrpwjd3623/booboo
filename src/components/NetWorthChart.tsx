@@ -3,12 +3,16 @@ import { motion } from 'framer-motion';
 import {
   AreaChart,
   Area,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  ReferenceLine
+  ReferenceLine,
+  Legend,
+  Cell,
 } from 'recharts';
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import type { MonthlyData } from '@/types';
@@ -29,7 +33,7 @@ interface CustomTooltipProps {
 function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
-    
+
     return (
       <div className="bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] p-4 border border-gray-100">
         <p className="text-sm font-semibold text-gray-900 mb-2">{label}</p>
@@ -45,6 +49,44 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
         {data.targetAchieved && (
           <div className="mt-2 inline-flex items-center gap-1 px-2 py-1 bg-green-100 rounded-full">
             <span className="text-xs font-medium text-green-600">목표 달성</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+  return null;
+}
+
+interface BarTooltipProps {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number; color: string }>;
+  label?: string;
+}
+
+function BarTooltip({ active, payload, label }: BarTooltipProps) {
+  if (active && payload && payload.length) {
+    const income = payload.find(p => p.name === '수입');
+    const expense = payload.find(p => p.name === '지출');
+    const savings = (income?.value ?? 0) - (expense?.value ?? 0);
+    return (
+      <div className="bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] p-4 border border-gray-100 min-w-[140px]">
+        <p className="text-sm font-semibold text-gray-900 mb-2">{label}</p>
+        {income && income.value > 0 && (
+          <div className="flex justify-between gap-4 text-sm mb-1">
+            <span className="text-gray-500">수입</span>
+            <span className="font-medium text-green-600">{(income.value / 10000).toFixed(0)}만원</span>
+          </div>
+        )}
+        {expense && expense.value > 0 && (
+          <div className="flex justify-between gap-4 text-sm mb-1">
+            <span className="text-gray-500">지출</span>
+            <span className="font-medium text-red-500">{(expense.value / 10000).toFixed(0)}만원</span>
+          </div>
+        )}
+        {(income?.value ?? 0) > 0 && (
+          <div className="flex justify-between gap-4 text-sm pt-1 border-t border-gray-100 mt-1">
+            <span className="text-gray-500">저축</span>
+            <span className={`font-bold ${savings >= 0 ? 'text-blue-500' : 'text-red-500'}`}>{(savings / 10000).toFixed(0)}만원</span>
           </div>
         )}
       </div>
@@ -171,6 +213,58 @@ export function NetWorthChart({ monthlyData, targetNetWorth }: NetWorthChartProp
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-full bg-green-500" style={{ background: 'repeating-linear-gradient(45deg, #34C759, #34C759 2px, transparent 2px, transparent 4px)' }} />
           <span className="text-xs text-gray-500">목표 금액</span>
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div className="border-t border-gray-100 my-6" />
+
+      {/* 월별 수입/지출 바 차트 */}
+      <div>
+        <h4 className="text-sm font-semibold text-gray-700 mb-1">월별 수입 / 지출</h4>
+        <p className="text-xs text-gray-400 mb-4">1월 ~ 12월 수입·지출 현황</p>
+        <div className="h-[220px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={monthlyData}
+              margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
+              barCategoryGap="30%"
+              barGap={2}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#F2F2F7" vertical={false} />
+              <XAxis
+                dataKey="monthName"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: '#8E8E93', fontSize: 11 }}
+                dy={8}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: '#8E8E93', fontSize: 11 }}
+                tickFormatter={(v) => v >= 10000000 ? `${(v / 100000000).toFixed(1)}억` : `${Math.round(v / 10000)}만`}
+                dx={-4}
+                width={44}
+              />
+              <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(0,0,0,0.03)', radius: 8 }} />
+              <Bar dataKey="income" name="수입" fill="#34C759" radius={[6, 6, 0, 0]}>
+                {monthlyData.map((d) => (
+                  <Cell key={d.month} fill={d.income > 0 ? '#34C759' : '#E5E5EA'} />
+                ))}
+              </Bar>
+              <Bar dataKey="expense" name="지출" fill="#FF3B30" radius={[6, 6, 0, 0]}>
+                {monthlyData.map((d) => (
+                  <Cell key={d.month} fill={d.expense > 0 ? '#FF3B30' : '#E5E5EA'} />
+                ))}
+              </Bar>
+              <Legend
+                iconType="circle"
+                iconSize={8}
+                wrapperStyle={{ paddingTop: '12px', fontSize: '12px', color: '#6B7280' }}
+              />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
     </motion.div>
