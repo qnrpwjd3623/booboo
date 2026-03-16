@@ -681,6 +681,15 @@ export function useSupabaseFinanceData() {
         }
     }, []);
 
+    const updateCustomCategory = useCallback(async (id: string, updates: Partial<Omit<CustomCategory, 'id'>>) => {
+        const { error } = await supabase
+            .from('custom_categories')
+            .update({ name: updates.name, icon: updates.icon ?? null })
+            .eq('id', id);
+        if (error) { console.error('Update custom category error:', error); return; }
+        setCustomCategories(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+    }, []);
+
     const deleteCustomCategory = useCallback(async (id: string) => {
         const { error } = await supabase.from('custom_categories').delete().eq('id', id);
         if (error) { console.error('Delete custom category error:', error); return; }
@@ -791,6 +800,7 @@ export function useSupabaseFinanceData() {
 
         // Custom category methods
         addCustomCategory,
+        updateCustomCategory,
         deleteCustomCategory,
 
         // Refresh

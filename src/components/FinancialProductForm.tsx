@@ -20,7 +20,7 @@ const productTypes = [
   { id: 'irp',        name: 'IRP',    icon: PiggyBank,  color: 'bg-purple-100 text-purple-600', group: 'investment' },
   { id: 'isa',        name: 'ISA',    icon: Shield,     color: 'bg-blue-100 text-blue-600',     group: 'investment' },
   { id: 'pension',    name: '연금저축', icon: Landmark,  color: 'bg-green-100 text-green-600',  group: 'investment' },
-  { id: 'fund',       name: '펀드',   icon: BarChart3,  color: 'bg-orange-100 text-orange-600', group: 'investment' },
+  { id: 'fund',       name: 'DC 퇴직금', icon: BarChart3,  color: 'bg-orange-100 text-orange-600', group: 'investment' },
   { id: 'deposit',    name: '예금',   icon: Wallet,     color: 'bg-cyan-100 text-cyan-600',     group: 'deposit' },
   { id: 'savings',    name: '적금',   icon: PiggyBank,  color: 'bg-pink-100 text-pink-600',     group: 'savings' },
   { id: 'realestate', name: '부동산', icon: Home,       color: 'bg-amber-100 text-amber-600',   group: 'realestate' },

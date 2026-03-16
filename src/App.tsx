@@ -204,6 +204,8 @@ function App() {
     updateLoan,
     deleteLoan,
     addCustomCategory,
+    updateCustomCategory,
+    deleteCustomCategory,
     getYearlySettings,
     updateYearlySettings,
     updateMonthlyTarget,
@@ -869,6 +871,8 @@ function App() {
         editTransaction={editingTransaction}
         customCategories={customCategories}
         onAddCustomCategory={addCustomCategory}
+        onUpdateCustomCategory={updateCustomCategory}
+        onDeleteCustomCategory={deleteCustomCategory}
       />
 
       <StockForm
