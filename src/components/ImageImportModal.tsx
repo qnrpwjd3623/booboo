@@ -279,7 +279,7 @@ export function ImageImportModal({
           {step === 'review' && (
             <div className="px-4 py-4">
               {/* 상단 컨트롤 */}
-              <div className="flex items-center justify-between px-1 mb-3">
+              <div className="flex items-center justify-between px-1 mb-2">
                 <p className="text-sm text-gray-500">
                   <span className="font-bold text-gray-900">{includedCount}건</span> 선택됨
                 </p>
@@ -297,6 +297,19 @@ export function ImageImportModal({
                     전체 해제
                   </button>
                 </div>
+              </div>
+              {/* 사용자 일괄 변경 */}
+              <div className="flex items-center gap-2 px-1 mb-3">
+                <span className="text-xs text-gray-400 flex-shrink-0">전체 변경</span>
+                {([partnerNames[0], partnerNames[1], 'shared'] as string[]).map((owner) => (
+                  <button
+                    key={owner}
+                    onClick={() => setDrafts(prev => prev.map(d => ({ ...d, owner })))}
+                    className="text-xs px-2.5 py-1 bg-gray-100 rounded-lg text-gray-600 hover:bg-orange-50 hover:text-orange-600 transition-colors font-medium"
+                  >
+                    {owner === 'shared' ? '공동' : owner}
+                  </button>
+                ))}
               </div>
 
               <div className="space-y-2">

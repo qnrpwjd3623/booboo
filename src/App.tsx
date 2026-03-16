@@ -152,8 +152,8 @@ function App() {
 
   const [profile, setProfile] = useLocalStorage<CoupleProfile>('couple-profile', defaultProfile);
   const [stockPrices, setStockPrices] = useState<Record<string, { currentPrice: number }>>({});
-  const [botMessage, setBotMessage] = useState<BotMessage | null>(null);
-  const [monthlyChallenge, setMonthlyChallenge] = useState<Challenge | null>(null);
+  const [botMessage, setBotMessage] = useLocalStorage<BotMessage | null>('booboo_bot_message', null);
+  const [monthlyChallenge, setMonthlyChallenge] = useLocalStorage<Challenge | null>('booboo_monthly_challenge', null);
   const [isLoadingAdvice, setIsLoadingAdvice] = useState(false);
   const [isLoadingChallenge, setIsLoadingChallenge] = useState(false);
 

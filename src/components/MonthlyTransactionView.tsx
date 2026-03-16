@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Plus, Pencil, Trash2, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, ImagePlus, ArrowUp, ArrowDown } from 'lucide-react';
 import type { Transaction, CustomCategory } from '@/types';
-import { getCategoryIcon } from '@/constants/categories';
+import { getCategoryIcon, EXPENSE_CATEGORIES } from '@/constants/categories';
 import { PersonSpendingCard } from './PersonSpendingCard';
 import { ImageImportModal } from './ImageImportModal';
 
@@ -81,10 +81,24 @@ export function MonthlyTransactionView({
 
   const filterTabs = [
     { id: 'all', label: '전체' },
+    { id: 'shared', label: '공동' },
     { id: partnerNames[0], label: partnerNames[0] },
     { id: partnerNames[1], label: partnerNames[1] },
-    { id: 'shared', label: '공동' },
   ];
+
+  // 카테고리 요약: 공동/전체 탭은 두 사람 합산, 개인 탭은 해당 사람만
+  const summaryScopeLabel = filterOwner === 'shared' ? '합산' : filterOwner === 'all' ? '합산' : filterOwner;
+  const summaryTxns =
+    filterOwner === 'all' || filterOwner === 'shared'
+      ? monthTxns
+      : monthTxns.filter((t) => t.owner === filterOwner);
+  const expenseByCategory = summaryTxns
+    .filter((t) => t.type === 'expense')
+    .reduce<Record<string, number>>((acc, t) => {
+      acc[t.category] = (acc[t.category] || 0) + t.amount;
+      return acc;
+    }, {});
+  const sortedExpenseCategories = Object.entries(expenseByCategory).sort((a, b) => b[1] - a[1]);
 
   const savingsColor =
     savingsRate >= 30
@@ -200,6 +214,11 @@ export function MonthlyTransactionView({
               <p className={`text-xl font-bold ${savingsColor}`}>
                 {totalIncome > 0 ? `${savingsRate.toFixed(0)}%` : '-'}
               </p>
+              {totalIncome > 0 && (
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {Math.round((totalIncome - totalExpense) / 10000).toLocaleString()}만원
+                </p>
+              )}
             </div>
           </div>
           {/* 저축률 바 */}
@@ -241,6 +260,28 @@ export function MonthlyTransactionView({
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-gray-900">거래 내역</h3>
           </div>
+
+          {/* 카테고리별 지출 합산 */}
+          {sortedExpenseCategories.length > 0 && (
+            <div className="mb-4 pb-4 border-b border-gray-100">
+              <p className="text-xs text-gray-400 mb-2">
+                카테고리별 지출 <span className="text-gray-300">({summaryScopeLabel})</span>
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {sortedExpenseCategories.map(([cat, amount]) => (
+                  <div key={cat} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 rounded-xl">
+                    <span className="text-sm">{getCategoryIcon(cat)}</span>
+                    <span className="text-xs text-gray-600 font-medium">{cat}</span>
+                    <span className="text-xs font-bold text-red-500">
+                      {amount >= 10000
+                        ? `${Math.round(amount / 10000).toLocaleString()}만`
+                        : `${amount.toLocaleString()}원`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 필터 탭 + 정렬 */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
