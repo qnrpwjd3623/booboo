@@ -32,6 +32,7 @@ export function PersonSpendingCard({ name, emoji, transactions, partnerName, ind
       const { data } = await supabase
         .from('ai_comments')
         .select('comment')
+        .eq('type', 'person')
         .eq('name', name)
         .eq('year', year)
         .eq('month', month)
@@ -77,10 +78,10 @@ export function PersonSpendingCard({ name, emoji, transactions, partnerName, ind
     try {
       const c = await getPersonCharacterComment(name, income, expense, topCategories, partnerName);
       setComment(c);
-      // Supabase에 upsert (같은 name+year+month면 덮어씀)
+      // Supabase에 upsert (같은 type+name+year+month면 덮어씀)
       await supabase.from('ai_comments').upsert(
-        { name, year, month, comment: c, updated_at: new Date().toISOString() },
-        { onConflict: 'name,year,month' }
+        { type: 'person', name, year, month, comment: c, updated_at: new Date().toISOString() },
+        { onConflict: 'type,name,year,month' }
       );
     } catch {
       setComment('이번달 어떻게 됐더라... 🤔');
