@@ -22,7 +22,7 @@ import { LoginPage } from '@/components/LoginPage';
 import { useSupabaseFinanceData } from '@/hooks/useSupabaseFinanceData';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useAuth } from '@/hooks/useAuth';
-import { fetchMultipleStockPrices, startStockPriceAutoUpdate } from '@/services/stockApi';
+import { fetchMultipleStockPrices } from '@/services/stockApi';
 import { getFinancialAdvice, getMonthlyChallenge, type FinancialContext } from '@/services/aiApi';
 import { Heart, Sparkles, Wallet, TrendingUp, PiggyBank, CreditCard, Menu, X, Settings, Target, Loader2, LogOut, GripVertical } from 'lucide-react';
 import type { Transaction, StockItem, FinancialProduct, LoanItem, BotMessage, Challenge } from '@/types';
@@ -276,7 +276,6 @@ function App() {
 
     const tickers = stocks.map(s => s.ticker);
 
-    // 초기 조회
     fetchMultipleStockPrices(tickers).then((prices) => {
       const priceMap: Record<string, { currentPrice: number }> = {};
       Object.entries(prices).forEach(([ticker, data]) => {
@@ -284,17 +283,6 @@ function App() {
       });
       setStockPrices(priceMap);
     });
-
-    // 자동 업데이트 (5분 간격)
-    const cleanup = startStockPriceAutoUpdate(tickers, (prices) => {
-      const priceMap: Record<string, { currentPrice: number }> = {};
-      Object.entries(prices).forEach(([ticker, data]) => {
-        priceMap[ticker] = { currentPrice: data.currentPrice };
-      });
-      setStockPrices(priceMap);
-    }, 5);
-
-    return cleanup;
   }, [stocks]);
 
   // 주식 가격 업데이트

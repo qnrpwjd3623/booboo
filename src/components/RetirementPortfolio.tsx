@@ -73,8 +73,6 @@ export function RetirementPortfolio({ products }: RetirementPortfolioProps) {
     };
 
     fetchPrices();
-    const id = setInterval(fetchPrices, 5 * 60 * 1000);
-    return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accounts.map((a) => a.id).join(',')]);
 
