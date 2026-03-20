@@ -9,11 +9,13 @@ export interface StockPrice {
   lastUpdated: string;
 }
 
-// CORS 프록시 목록 (첫 번째 실패 시 두 번째로 폴백)
+// CORS 프록시 목록 (순서대로 폴백)
 const YAHOO_FINANCE_API_BASE = 'https://query1.finance.yahoo.com/v8/finance/chart/';
 const PROXY_LIST = [
   (url: string) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
   (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+  (url: string) => `https://thingproxy.freeboard.io/fetch/${url}`,
 ];
 
 // 프록시를 순서대로 시도 — 첫 번째 성공한 응답 반환
@@ -22,8 +24,9 @@ async function fetchWithProxy(path: string): Promise<Response> {
   let lastError: unknown;
   for (const proxyFn of PROXY_LIST) {
     try {
-      const res = await fetch(proxyFn(fullUrl));
+      const res = await fetch(proxyFn(fullUrl), { signal: AbortSignal.timeout(5000) });
       if (res.ok) return res;
+      lastError = new Error(`HTTP ${res.status}`);
     } catch (e) {
       lastError = e;
     }
