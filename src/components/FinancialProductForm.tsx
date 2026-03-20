@@ -281,7 +281,7 @@ export function FinancialProductForm({
     if (!name) return false;
     if (type === 'coin') return !!(company && parseFloat(coinQuantity || '0') > 0 && principalNum > 0 && currentValueNum > 0);
     if (isHoldingsType(type)) {
-      if (holdingsMode === 'etf') return !!(company && principalNum > 0 && holdings.filter(h => h.ticker && parseFloat(h.shares || '0') > 0).length > 0);
+      if (holdingsMode === 'etf') return !!(company && holdings.filter(h => h.ticker && parseFloat(h.shares || '0') > 0).length > 0);
       return !!(company && principalNum > 0 && currentValueNum > 0);
     }
     switch (group) {
@@ -311,6 +311,14 @@ export function FinancialProductForm({
     let finalPrincipal = principalNum;
     let finalCurrentValue = currentValueNum;
     let finalReturnRate = 0;
+
+    // ETF 모드: 납입금 = avgPrice × shares 합산 자동 계산
+    if (isHoldingsType(type) && holdingsMode === 'etf' && finalHoldings) {
+      const totalCost = finalHoldings.reduce((sum, h) => {
+        return sum + (h.avgPrice ? h.avgPrice * h.shares : 0);
+      }, 0);
+      if (totalCost > 0) finalPrincipal = Math.round(totalCost);
+    }
 
     if (group === 'investment') {
       finalReturnRate = principalNum > 0 ? (investReturnValue / principalNum) * 100 : 0;
@@ -754,20 +762,6 @@ export function FinancialProductForm({
                     </motion.div>
                   )}
 
-                  {/* ETF 모드에서도 납입금 원금 입력 */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">납입금 (원금)</label>
-                    <div className="relative">
-                      <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <input
-                        type="text"
-                        value={principal}
-                        onChange={(e) => setPrincipal(formatNumber(e.target.value))}
-                        placeholder="10,000,000"
-                        className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
-                      />
-                    </div>
-                  </div>
                 </div>
               )}
             </motion.div>
