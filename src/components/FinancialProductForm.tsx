@@ -1,11 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Building2, Wallet, TrendingUp, Calendar, FileText,
-  PiggyBank, Landmark, Shield, BarChart3, Home, Percent, Coins
+  PiggyBank, Landmark, Shield, BarChart3, Home, Percent, Coins,
+  Search, Loader2, CheckCircle, AlertCircle, Hash
 } from 'lucide-react';
 import { Modal } from './Modal';
 import type { FinancialProduct } from '@/types';
+import { fetchCoinPrice } from '@/services/coinApi';
+import type { CoinPrice } from '@/services/coinApi';
 
 interface FinancialProductFormProps {
   onAdd: (product: Omit<FinancialProduct, 'id'>) => void;
@@ -51,6 +54,13 @@ export function FinancialProductForm({
   const [maturityDate, setMaturityDate] = useState('');
   const [owner, setOwner] = useState('shared');
 
+  // 코인 전용 상태
+  const [coinTicker, setCoinTicker] = useState('');
+  const [coinQuantity, setCoinQuantity] = useState('');
+  const [coinFetchState, setCoinFetchState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [coinFetchedInfo, setCoinFetchedInfo] = useState<CoinPrice | null>(null);
+  const coinFetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const isEditing = !!editProduct;
   const group = getGroup(type);
 
@@ -70,6 +80,8 @@ export function FinancialProductForm({
       setPaidMonths(editProduct.paidMonths?.toString() || '');
       setTotalMonths(editProduct.totalMonths?.toString() || '');
       setAddress(editProduct.address || '');
+      setCoinTicker(editProduct.ticker || '');
+      setCoinQuantity(editProduct.coinQuantity?.toString() || '');
     } else {
       setType('irp');
       setName('');
@@ -85,7 +97,11 @@ export function FinancialProductForm({
       setPaidMonths('');
       setTotalMonths('');
       setAddress('');
+      setCoinTicker('');
+      setCoinQuantity('');
     }
+    setCoinFetchState('idle');
+    setCoinFetchedInfo(null);
   }, [editProduct, isOpen]);
 
   // type 바뀌면 유형별 필드 초기화
@@ -97,8 +113,52 @@ export function FinancialProductForm({
       setPaidMonths('');
       setTotalMonths('');
       setAddress('');
+      setCoinTicker('');
+      setCoinQuantity('');
+      setCoinFetchState('idle');
+      setCoinFetchedInfo(null);
     }
   }, [type]);
+
+  // 코인 티커 입력 시 자동 조회 (debounce 800ms)
+  useEffect(() => {
+    if (type !== 'coin') return;
+    if (!coinTicker || coinTicker.length < 1) {
+      setCoinFetchState('idle');
+      setCoinFetchedInfo(null);
+      return;
+    }
+    if (coinFetchTimerRef.current) clearTimeout(coinFetchTimerRef.current);
+    coinFetchTimerRef.current = setTimeout(() => handleCoinFetch(), 800);
+    return () => { if (coinFetchTimerRef.current) clearTimeout(coinFetchTimerRef.current); };
+  }, [coinTicker, type]);
+
+  // 코인 수량 변경 시 현재 평가액 자동 계산
+  useEffect(() => {
+    if (type !== 'coin' || !coinFetchedInfo || !coinQuantity) return;
+    const qty = parseFloat(coinQuantity);
+    if (!isNaN(qty) && qty > 0) {
+      setCurrentValue(Math.round(coinFetchedInfo.currentPriceKRW * qty).toLocaleString());
+    }
+  }, [coinQuantity, coinFetchedInfo, type]);
+
+  const handleCoinFetch = async () => {
+    if (!coinTicker) return;
+    setCoinFetchState('loading');
+    setCoinFetchedInfo(null);
+    const result = await fetchCoinPrice(coinTicker);
+    if (result) {
+      setCoinFetchedInfo(result);
+      if (!name) setName(result.name);
+      const qty = parseFloat(coinQuantity);
+      if (!isNaN(qty) && qty > 0) {
+        setCurrentValue(Math.round(result.currentPriceKRW * qty).toLocaleString());
+      }
+      setCoinFetchState('success');
+    } else {
+      setCoinFetchState('error');
+    }
+  };
 
   const formatNumber = (value: string) => {
     const numbers = value.replace(/[^0-9]/g, '');
@@ -129,6 +189,7 @@ export function FinancialProductForm({
   // 유형별 isValid
   const isValid = (() => {
     if (!name) return false;
+    if (type === 'coin') return !!(company && parseFloat(coinQuantity || '0') > 0 && principalNum > 0 && currentValueNum > 0);
     switch (group) {
       case 'investment': return !!(company && principalNum > 0 && currentValueNum > 0);
       case 'deposit':    return !!(company && principalNum > 0);
@@ -176,6 +237,8 @@ export function FinancialProductForm({
       paidMonths: group === 'savings' ? paidMonthsNum : undefined,
       totalMonths: group === 'savings' ? totalMonthsNum : undefined,
       address: group === 'realestate' ? (address || undefined) : undefined,
+      ticker: type === 'coin' ? coinTicker.toUpperCase() : undefined,
+      coinQuantity: type === 'coin' ? parseFloat(coinQuantity || '0') : undefined,
     };
 
     if (isEditing && editProduct && onUpdate) {
@@ -236,6 +299,51 @@ export function FinancialProductForm({
           </div>
         </div>
 
+        {/* 코인 전용: 티커 자동조회 */}
+        {type === 'coin' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              티커
+              <span className="ml-2 text-xs text-gray-400 font-normal">입력하면 자동 조회됩니다</span>
+            </label>
+            <div className="relative">
+              <Coins className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                value={coinTicker}
+                onChange={(e) => setCoinTicker(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                placeholder="BTC, ETH, SOL..."
+                className="w-full pl-12 pr-12 py-3 bg-gray-50 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:bg-white transition-all"
+              />
+              <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                {coinFetchState === 'loading' && <Loader2 className="w-5 h-5 text-yellow-400 animate-spin" />}
+                {coinFetchState === 'success' && <CheckCircle className="w-5 h-5 text-green-500" />}
+                {coinFetchState === 'error' && <AlertCircle className="w-5 h-5 text-red-400" />}
+                {coinFetchState === 'idle' && coinTicker.length >= 1 && (
+                  <button type="button" onClick={handleCoinFetch}>
+                    <Search className="w-5 h-5 text-gray-400 hover:text-yellow-500 transition-colors" />
+                  </button>
+                )}
+              </div>
+            </div>
+            {coinFetchState === 'success' && coinFetchedInfo && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-2 px-3 py-2 bg-yellow-50 rounded-lg flex items-center justify-between"
+              >
+                <span className="text-xs text-yellow-700 font-medium truncate mr-2">{coinFetchedInfo.name}</span>
+                <span className="text-xs text-yellow-800 font-bold whitespace-nowrap">
+                  ${coinFetchedInfo.currentPriceUSD.toLocaleString()} · {coinFetchedInfo.currentPriceKRW.toLocaleString()}원
+                </span>
+              </motion.div>
+            )}
+            {coinFetchState === 'error' && (
+              <p className="mt-2 text-xs text-red-500 px-1">티커를 확인해주세요 (예: BTC, ETH, SOL)</p>
+            )}
+          </div>
+        )}
+
         {/* 자산명 + 기관명/주소 */}
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -274,8 +382,68 @@ export function FinancialProductForm({
 
         {/* 유형별 금액 필드 */}
         <AnimatePresence mode="wait">
+          {/* 코인: 보유 수량 + 매수 원금 + 현재 평가액(자동) */}
+          {type === 'coin' && (
+            <motion.div
+              key="coin"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">보유 수량</label>
+                  <div className="relative">
+                    <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="number"
+                      value={coinQuantity}
+                      onChange={(e) => setCoinQuantity(e.target.value)}
+                      placeholder="0.5"
+                      min="0"
+                      step="0.00000001"
+                      className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:bg-white transition-all"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">매수 원금 (원)</label>
+                  <div className="relative">
+                    <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      value={principal}
+                      onChange={(e) => setPrincipal(formatNumber(e.target.value))}
+                      placeholder="10,000,000"
+                      className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  현재 평가액 (원)
+                  {coinFetchState === 'success' && <span className="ml-2 text-xs text-yellow-600 font-normal">자동 계산됨</span>}
+                </label>
+                <div className="relative">
+                  <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={currentValue}
+                    onChange={(e) => setCurrentValue(formatNumber(e.target.value))}
+                    placeholder="12,000,000"
+                    className={`w-full pl-12 pr-4 py-3 bg-gray-50 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:bg-white transition-all ${
+                      coinFetchState === 'success' ? 'ring-2 ring-yellow-300 bg-yellow-50' : ''
+                    }`}
+                  />
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {/* 투자상품 (IRP/ISA/연금/펀드): 원금 + 현재 평가액 */}
-          {group === 'investment' && (
+          {group === 'investment' && type !== 'coin' && (
             <motion.div
               key="investment"
               initial={{ opacity: 0, y: 4 }}

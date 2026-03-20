@@ -94,6 +94,8 @@ interface ProductExtFields {
     paidMonths?: number;
     totalMonths?: number;
     address?: string;
+    ticker?: string;
+    coinQuantity?: number;
 }
 
 function encodeProductMemo(userMemo: string | undefined, ext: ProductExtFields): string {
@@ -162,6 +164,8 @@ function toAppProduct(db: DbProduct): FinancialProduct {
         paidMonths: ext.paidMonths,
         totalMonths: ext.totalMonths,
         address: ext.address,
+        ticker: ext.ticker,
+        coinQuantity: ext.coinQuantity,
     };
 }
 
@@ -551,6 +555,8 @@ export function useSupabaseFinanceData() {
             paidMonths: product.paidMonths,
             totalMonths: product.totalMonths,
             address: product.address,
+            ticker: product.ticker,
+            coinQuantity: product.coinQuantity,
         };
         const memoStr = encodeProductMemo(product.memo, ext);
 
@@ -601,7 +607,9 @@ export function useSupabaseFinanceData() {
             updates.monthlyPayment !== undefined ||
             updates.paidMonths !== undefined ||
             updates.totalMonths !== undefined ||
-            updates.address !== undefined
+            updates.address !== undefined ||
+            updates.ticker !== undefined ||
+            updates.coinQuantity !== undefined
         ) {
             const ext: ProductExtFields = {
                 interestRate: updates.interestRate,
@@ -609,6 +617,8 @@ export function useSupabaseFinanceData() {
                 paidMonths: updates.paidMonths,
                 totalMonths: updates.totalMonths,
                 address: updates.address,
+                ticker: updates.ticker,
+                coinQuantity: updates.coinQuantity,
             };
             dbUpdates.memo = encodeProductMemo(updates.memo, ext);
         }

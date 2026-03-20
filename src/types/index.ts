@@ -65,6 +65,8 @@ export interface FinancialProduct {
   paidMonths?: number;    // 적금 현재 납입 회차
   totalMonths?: number;   // 적금 목표 회차
   address?: string;       // 부동산 주소
+  ticker?: string;        // 코인 티커 (BTC, ETH 등)
+  coinQuantity?: number;  // 코인 보유 수량
 }
 
 // 대출
