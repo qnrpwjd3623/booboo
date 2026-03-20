@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, TrendingDown, RefreshCw, ChevronDown, Building2, Landmark } from 'lucide-react';
+import { TrendingUp, TrendingDown, ChevronDown, Building2, Landmark } from 'lucide-react';
 import type { FinancialProduct } from '@/types';
 import { formatCurrencyWon } from '@/utils/format';
 import { fetchStockPrice } from '@/services/stockApi';
@@ -25,8 +25,6 @@ const TYPE_COLOR: Record<string, string> = {
 export function RetirementPortfolio({ products }: RetirementPortfolioProps) {
   const [ref, isInView] = useInView<HTMLDivElement>({ threshold: 0.1 });
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  // ticker → 현재가 (갱신 후 사용)
   const [livePrices, setLivePrices] = useState<Record<string, number>>({});
 
   const accounts = products.filter((p) => ['irp', 'isa', 'fund'].includes(p.type));
@@ -51,26 +49,34 @@ export function RetirementPortfolio({ products }: RetirementPortfolioProps) {
   const totalReturn = totalCurrentValue - totalPrincipal;
   const totalReturnRate = totalPrincipal > 0 ? (totalReturn / totalPrincipal) * 100 : 0;
 
-  // ETF 현재가 갱신
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    const tickers = new Set<string>();
-    accounts.forEach((p) => p.holdings?.forEach((h) => tickers.add(h.ticker)));
-    const results = await Promise.allSettled(
-      [...tickers].map(async (ticker) => {
-        const r = await fetchStockPrice(ticker);
-        return { ticker, price: r?.currentPrice ?? null };
-      })
-    );
-    const newPrices: Record<string, number> = { ...livePrices };
-    results.forEach((r) => {
-      if (r.status === 'fulfilled' && r.value.price !== null) {
-        newPrices[r.value.ticker] = r.value.price;
-      }
-    });
-    setLivePrices(newPrices);
-    setIsRefreshing(false);
-  };
+  // ETF 현재가 자동 조회 (마운트 시 + 5분 간격)
+  useEffect(() => {
+    const tickers = [...new Set(accounts.flatMap((p) => p.holdings?.map((h) => h.ticker) ?? []))];
+    if (tickers.length === 0) return;
+
+    const fetchPrices = async () => {
+      const results = await Promise.allSettled(
+        tickers.map(async (ticker) => {
+          const r = await fetchStockPrice(ticker);
+          return { ticker, price: r?.currentPrice ?? null };
+        })
+      );
+      setLivePrices((prev) => {
+        const next = { ...prev };
+        results.forEach((r) => {
+          if (r.status === 'fulfilled' && r.value.price !== null) {
+            next[r.value.ticker] = r.value.price;
+          }
+        });
+        return next;
+      });
+    };
+
+    fetchPrices();
+    const id = setInterval(fetchPrices, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accounts.map((a) => a.id).join(',')]);
 
   if (accounts.length === 0) return null;
 
@@ -94,17 +100,6 @@ export function RetirementPortfolio({ products }: RetirementPortfolioProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* 가격 갱신 버튼 */}
-          {accounts.some((p) => p.holdings && p.holdings.length > 0) && (
-            <button
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              title="ETF 현재가 갱신"
-              className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-50 hover:bg-purple-50 hover:text-purple-500 text-gray-400 transition-all disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            </button>
-          )}
           <div className="text-right">
             <p className="text-xs text-gray-500 mb-1">총 수익률</p>
             <div className={`flex items-center gap-1 ${totalReturnRate >= 0 ? 'text-green-500' : 'text-red-500'}`}>
