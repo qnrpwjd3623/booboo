@@ -51,6 +51,7 @@ export interface ProductHolding {
   ticker: string;    // 종목코드 (e.g., 069500) or US ETF (e.g., QQQ)
   shares: number;    // 보유 수량
   name: string;      // 종목명 (auto-filled)
+  avgPrice?: number; // 매수 단가 (원)
 }
 
 // 금융상품 / 자산 (IRP, ISA, 연금저축, 펀드, 예금, 적금, 부동산)

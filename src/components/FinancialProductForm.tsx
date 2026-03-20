@@ -24,10 +24,13 @@ interface HoldingEntry {
   id: number;
   ticker: string;
   shares: string;
+  avgPrice: string;  // 매수 단가 (원)
   name: string;
   priceKRW: number | null;
   fetchState: 'idle' | 'loading' | 'success' | 'error';
 }
+
+type HoldingsMode = 'cash' | 'etf';
 
 const HOLDINGS_TYPES = ['irp', 'isa', 'fund'] as const;
 const isHoldingsType = (t: string) => (HOLDINGS_TYPES as readonly string[]).includes(t);
@@ -74,7 +77,8 @@ export function FinancialProductForm({
   const [coinFetchedInfo, setCoinFetchedInfo] = useState<CoinPrice | null>(null);
   const coinFetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 투자계좌(IRP/ISA/DC) ETF 보유 목록 상태
+  // 투자계좌(IRP/ISA/DC) 입력 모드 및 ETF 보유 목록 상태
+  const [holdingsMode, setHoldingsMode] = useState<HoldingsMode>('cash');
   const [holdings, setHoldings] = useState<HoldingEntry[]>([]);
   const holdingTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const nextIdRef = useRef(0);
@@ -100,16 +104,19 @@ export function FinancialProductForm({
       setAddress(editProduct.address || '');
       setCoinTicker(editProduct.ticker || '');
       setCoinQuantity(editProduct.coinQuantity?.toString() || '');
-      if (isHoldingsType(editProduct.type) && editProduct.holdings) {
+      if (isHoldingsType(editProduct.type) && editProduct.holdings && editProduct.holdings.length > 0) {
+        setHoldingsMode('etf');
         setHoldings(editProduct.holdings.map(h => ({
           id: nextIdRef.current++,
           ticker: h.ticker,
           shares: h.shares.toString(),
+          avgPrice: h.avgPrice?.toString() || '',
           name: h.name,
           priceKRW: null,
           fetchState: 'idle' as const,
         })));
       } else {
+        setHoldingsMode('cash');
         setHoldings([]);
       }
     } else {
@@ -148,6 +155,7 @@ export function FinancialProductForm({
       setCoinQuantity('');
       setCoinFetchState('idle');
       setCoinFetchedInfo(null);
+      setHoldingsMode('cash');
       setHoldings([]);
     }
   }, [type]);
@@ -186,7 +194,7 @@ export function FinancialProductForm({
 
   const addHolding = () => {
     const id = nextIdRef.current++;
-    setHoldings(prev => [...prev, { id, ticker: '', shares: '', name: '', priceKRW: null, fetchState: 'idle' }]);
+    setHoldings(prev => [...prev, { id, ticker: '', shares: '', avgPrice: '', name: '', priceKRW: null, fetchState: 'idle' }]);
   };
 
   const removeHolding = (id: number) => {
@@ -216,6 +224,12 @@ export function FinancialProductForm({
 
   const updateHoldingShares = (id: number, shares: string) => {
     setHoldings(prev => prev.map(h => h.id === id ? { ...h, shares } : h));
+  };
+
+  const updateHoldingAvgPrice = (id: number, avgPrice: string) => {
+    const numbers = avgPrice.replace(/[^0-9]/g, '');
+    const formatted = numbers ? Number(numbers).toLocaleString() : '';
+    setHoldings(prev => prev.map(h => h.id === id ? { ...h, avgPrice: formatted } : h));
   };
 
   const handleCoinFetch = async () => {
@@ -266,6 +280,10 @@ export function FinancialProductForm({
   const isValid = (() => {
     if (!name) return false;
     if (type === 'coin') return !!(company && parseFloat(coinQuantity || '0') > 0 && principalNum > 0 && currentValueNum > 0);
+    if (isHoldingsType(type)) {
+      if (holdingsMode === 'etf') return !!(company && principalNum > 0 && holdings.filter(h => h.ticker && parseFloat(h.shares || '0') > 0).length > 0);
+      return !!(company && principalNum > 0 && currentValueNum > 0);
+    }
     switch (group) {
       case 'investment': return !!(company && principalNum > 0 && currentValueNum > 0);
       case 'deposit':    return !!(company && principalNum > 0);
@@ -279,10 +297,15 @@ export function FinancialProductForm({
     e.preventDefault();
     if (!isValid) return;
 
-    const finalHoldings = isHoldingsType(type)
+    const finalHoldings = (isHoldingsType(type) && holdingsMode === 'etf')
       ? holdings
           .filter(h => h.ticker && parseFloat(h.shares || '0') > 0)
-          .map(h => ({ ticker: h.ticker, shares: parseFloat(h.shares), name: h.name }))
+          .map(h => ({
+            ticker: h.ticker,
+            shares: parseFloat(h.shares),
+            name: h.name,
+            avgPrice: h.avgPrice ? Number(h.avgPrice.replace(/,/g, '')) : undefined,
+          }))
       : undefined;
 
     let finalPrincipal = principalNum;
@@ -563,101 +586,190 @@ export function FinancialProductForm({
             </motion.div>
           )}
 
-          {/* IRP/ISA/DC퇴직금: ETF 보유 목록 */}
+          {/* IRP/ISA/DC퇴직금: 현금/ETF 모드 선택 */}
           {isHoldingsType(type) && (
-            <motion.div key="holdings" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-gray-700">보유 ETF 목록</label>
-                <button type="button" onClick={addHolding} className="text-xs text-blue-600 hover:text-blue-700 font-medium px-3 py-1.5 bg-blue-50 hover:bg-blue-100 rounded-lg transition-all">
-                  + ETF 추가
-                </button>
+            <motion.div key="holdings" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="space-y-4">
+
+              {/* 현금 / ETF 토글 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">운용 방식</label>
+                <div className="flex gap-2">
+                  {([
+                    { id: 'cash', label: '💵 현금 / 기타' },
+                    { id: 'etf',  label: '📈 ETF 종목별' },
+                  ] as { id: HoldingsMode; label: string }[]).map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setHoldingsMode(m.id)}
+                      className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                        holdingsMode === m.id
+                          ? 'bg-gray-900 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {holdings.length === 0 && (
-                <div className="py-6 text-center border-2 border-dashed border-gray-200 rounded-xl">
-                  <p className="text-sm text-gray-400">ETF 추가 버튼을 눌러 보유 종목을 입력하세요</p>
-                  <p className="text-xs text-gray-300 mt-1">현재 평가액이 자동으로 계산됩니다</p>
-                </div>
-              )}
-
-              {holdings.map(h => (
-                <div key={h.id} className="p-3 bg-gray-50 rounded-xl space-y-2">
-                  <div className="flex gap-2">
-                    {/* 티커 입력 */}
-                    <div className="flex-1 relative">
+              {/* 현금 모드: 납입금 + 현재 평가액 */}
+              {holdingsMode === 'cash' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">납입금 (원금)</label>
+                    <div className="relative">
+                      <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input
                         type="text"
-                        value={h.ticker}
-                        onChange={(e) => updateHoldingTicker(h.id, e.target.value.replace(/\s/g, '').toUpperCase())}
-                        placeholder="069500 또는 QQQ"
-                        className="w-full pl-3 pr-8 py-2 text-sm bg-white rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        value={principal}
+                        onChange={(e) => setPrincipal(formatNumber(e.target.value))}
+                        placeholder="10,000,000"
+                        className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
                       />
-                      <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                        {h.fetchState === 'loading' && <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />}
-                        {h.fetchState === 'success' && <CheckCircle className="w-4 h-4 text-green-500" />}
-                        {h.fetchState === 'error' && <AlertCircle className="w-4 h-4 text-red-400" />}
-                      </div>
                     </div>
-                    {/* 수량 */}
-                    <input
-                      type="number"
-                      value={h.shares}
-                      onChange={(e) => updateHoldingShares(h.id, e.target.value)}
-                      placeholder="수량"
-                      min="0"
-                      step="1"
-                      className="w-20 px-3 py-2 text-sm bg-white rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    />
-                    {/* 삭제 */}
-                    <button type="button" onClick={() => removeHolding(h.id)} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
                   </div>
-                  {/* 조회 결과 */}
-                  {h.fetchState === 'success' && h.priceKRW && (
-                    <div className="flex justify-between items-center text-xs px-1">
-                      <span className="text-gray-500 truncate mr-2">{h.name}</span>
-                      <span className="text-gray-700 font-medium whitespace-nowrap">
-                        {h.priceKRW.toLocaleString()}원
-                        {parseFloat(h.shares || '0') > 0 && (
-                          <span className="text-blue-600 ml-1">× {h.shares} = {Math.round(h.priceKRW * parseFloat(h.shares)).toLocaleString()}원</span>
-                        )}
-                      </span>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">현재 평가액</label>
+                    <div className="relative">
+                      <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="text"
+                        value={currentValue}
+                        onChange={(e) => setCurrentValue(formatNumber(e.target.value))}
+                        placeholder="12,000,000"
+                        className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
+                      />
                     </div>
-                  )}
-                  {h.fetchState === 'error' && (
-                    <p className="text-xs text-red-500 px-1">종목코드를 확인하세요 (국내: 6자리 숫자, 미국ETF: 영문)</p>
-                  )}
+                  </div>
                 </div>
-              ))}
-
-              {/* 합산 */}
-              {holdings.some(h => h.priceKRW && parseFloat(h.shares || '0') > 0) && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 bg-blue-50 rounded-xl flex justify-between items-center">
-                  <span className="text-sm text-blue-700 font-medium">ETF 합산 평가액</span>
-                  <span className="text-sm text-blue-800 font-bold">
-                    {Math.round(holdings.reduce((sum, h) => {
-                      const qty = parseFloat(h.shares || '0');
-                      return sum + (h.priceKRW && qty > 0 ? h.priceKRW * qty : 0);
-                    }, 0)).toLocaleString()}원
-                  </span>
-                </motion.div>
               )}
 
-              {/* 납입금 원금 - holdings 타입에서도 유지 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">납입금 (원금)</label>
-                <div className="relative">
-                  <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    value={principal}
-                    onChange={(e) => setPrincipal(formatNumber(e.target.value))}
-                    placeholder="10,000,000"
-                    className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
-                  />
+              {/* ETF 모드: 종목 목록 */}
+              {holdingsMode === 'etf' && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-gray-700">보유 ETF 목록</label>
+                    <button type="button" onClick={addHolding} className="text-xs text-blue-600 hover:text-blue-700 font-medium px-3 py-1.5 bg-blue-50 hover:bg-blue-100 rounded-lg transition-all">
+                      + ETF 추가
+                    </button>
+                  </div>
+
+                  {holdings.length === 0 && (
+                    <div className="py-6 text-center border-2 border-dashed border-gray-200 rounded-xl">
+                      <p className="text-sm text-gray-400">ETF 추가 버튼을 눌러 보유 종목을 입력하세요</p>
+                      <p className="text-xs text-gray-300 mt-1">현재 평가액이 자동으로 계산됩니다</p>
+                    </div>
+                  )}
+
+                  {holdings.map(h => (
+                    <div key={h.id} className="p-3 bg-gray-50 rounded-xl space-y-2">
+                      {/* 1행: 티커 + 수량 + 삭제 */}
+                      <div className="flex gap-2 items-center">
+                        <div className="flex-1 relative">
+                          <input
+                            type="text"
+                            value={h.ticker}
+                            onChange={(e) => updateHoldingTicker(h.id, e.target.value.replace(/\s/g, '').toUpperCase())}
+                            placeholder="069500 or QQQ"
+                            className="w-full pl-3 pr-8 py-2 text-sm bg-white rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                          />
+                          <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                            {h.fetchState === 'loading' && <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />}
+                            {h.fetchState === 'success' && <CheckCircle className="w-4 h-4 text-green-500" />}
+                            {h.fetchState === 'error' && <AlertCircle className="w-4 h-4 text-red-400" />}
+                          </div>
+                        </div>
+                        <input
+                          type="number"
+                          value={h.shares}
+                          onChange={(e) => updateHoldingShares(h.id, e.target.value)}
+                          placeholder="수량"
+                          min="0"
+                          step="1"
+                          className="w-16 px-2 py-2 text-sm bg-white rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                        <button type="button" onClick={() => removeHolding(h.id)} className="p-2 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* 2행: 매수 단가 */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400 whitespace-nowrap">매수 단가</span>
+                        <input
+                          type="text"
+                          value={h.avgPrice}
+                          onChange={(e) => updateHoldingAvgPrice(h.id, e.target.value)}
+                          placeholder="평균 매수가 (원)"
+                          className="flex-1 px-3 py-1.5 text-sm bg-white rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </div>
+
+                      {/* 조회 결과 + 손익 */}
+                      {h.fetchState === 'success' && h.priceKRW && (
+                        <div className="space-y-1 px-1">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-gray-500 truncate mr-2">{h.name}</span>
+                            <span className="text-gray-700 font-medium whitespace-nowrap">
+                              현재 {h.priceKRW.toLocaleString()}원
+                              {parseFloat(h.shares || '0') > 0 && (
+                                <span className="text-blue-600 ml-1">
+                                  → {Math.round(h.priceKRW * parseFloat(h.shares)).toLocaleString()}원
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                          {h.avgPrice && parseFloat(h.shares || '0') > 0 && (() => {
+                            const avg = Number(h.avgPrice.replace(/,/g, ''));
+                            const qty = parseFloat(h.shares);
+                            if (!avg) return null;
+                            const gainLoss = (h.priceKRW - avg) * qty;
+                            const rate = ((h.priceKRW - avg) / avg) * 100;
+                            return (
+                              <div className={`text-xs font-medium ${gainLoss >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                {gainLoss >= 0 ? '▲' : '▼'} {Math.abs(gainLoss).toLocaleString()}원 ({gainLoss >= 0 ? '+' : ''}{rate.toFixed(1)}%)
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+                      {h.fetchState === 'error' && (
+                        <p className="text-xs text-red-500 px-1">종목코드 확인 (국내: 6자리 숫자, 미국ETF: 영문)</p>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* ETF 합산 */}
+                  {holdings.some(h => h.priceKRW && parseFloat(h.shares || '0') > 0) && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 bg-blue-50 rounded-xl flex justify-between items-center">
+                      <span className="text-sm text-blue-700 font-medium">ETF 합산 평가액</span>
+                      <span className="text-sm text-blue-800 font-bold">
+                        {Math.round(holdings.reduce((sum, h) => {
+                          const qty = parseFloat(h.shares || '0');
+                          return sum + (h.priceKRW && qty > 0 ? h.priceKRW * qty : 0);
+                        }, 0)).toLocaleString()}원
+                      </span>
+                    </motion.div>
+                  )}
+
+                  {/* ETF 모드에서도 납입금 원금 입력 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">납입금 (원금)</label>
+                    <div className="relative">
+                      <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="text"
+                        value={principal}
+                        onChange={(e) => setPrincipal(formatNumber(e.target.value))}
+                        placeholder="10,000,000"
+                        className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </motion.div>
           )}
 
