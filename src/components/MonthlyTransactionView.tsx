@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Plus, Pencil, Trash2, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, ImagePlus, ArrowUp, ArrowDown } from 'lucide-react';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import type { Transaction, CustomCategory } from '@/types';
 import { getCategoryIcon } from '@/constants/categories';
 import { PersonSpendingCard } from './PersonSpendingCard';
@@ -48,6 +48,7 @@ export function MonthlyTransactionView({
   customCategories,
 }: MonthlyTransactionViewProps) {
   const [filterOwner, setFilterOwner] = useState<string>('all');
+  const [activeChartIndex, setActiveChartIndex] = useState<number | null>(null);
   const [isImageImportOpen, setIsImageImportOpen] = useState(false);
   const [sortBy, setSortBy] = useState<'date' | 'amount'>('date');
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
@@ -276,40 +277,58 @@ export function MonthlyTransactionView({
               </p>
               <div className="flex flex-col sm:flex-row gap-4 items-center">
                 {/* 도넛 차트 */}
-                <div className="relative flex-shrink-0 w-36 h-36">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={sortedExpenseCategories.map(([cat, amt]) => ({ name: cat, value: amt }))}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={42}
-                        outerRadius={62}
-                        paddingAngle={2}
-                        dataKey="value"
-                        strokeWidth={0}
-                      >
-                        {sortedExpenseCategories.map((_, i) => (
-                          <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        formatter={(value: number, name: string) => [
-                          value >= 10000
-                            ? `${Math.round(value / 10000).toLocaleString()}만원`
-                            : `${value.toLocaleString()}원`,
-                          name,
-                        ]}
-                        contentStyle={{ fontSize: 12, borderRadius: 8, border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  {/* 중앙 총합 */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <span className="text-xs text-gray-400">총 지출</span>
-                    <span className="text-sm font-bold text-gray-800">
-                      {Math.round(totalExpense / 10000).toLocaleString()}만
-                    </span>
+                <div className="flex-shrink-0 flex flex-col items-center gap-1">
+                  <div className="relative w-36 h-36">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={sortedExpenseCategories.map(([cat, amt]) => ({ name: cat, value: amt }))}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={42}
+                          outerRadius={62}
+                          paddingAngle={2}
+                          dataKey="value"
+                          strokeWidth={0}
+                          onMouseEnter={(_, i) => setActiveChartIndex(i)}
+                          onMouseLeave={() => setActiveChartIndex(null)}
+                        >
+                          {sortedExpenseCategories.map((_, i) => (
+                            <Cell
+                              key={i}
+                              fill={CHART_COLORS[i % CHART_COLORS.length]}
+                              opacity={activeChartIndex === null || activeChartIndex === i ? 1 : 0.4}
+                              style={{ cursor: 'pointer', transition: 'opacity 0.15s' }}
+                            />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                    {/* 중앙: 호버 시 카테고리 정보, 기본은 총 지출 */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      {activeChartIndex !== null && sortedExpenseCategories[activeChartIndex] ? (
+                        <>
+                          <span className="text-xs text-gray-500 font-medium">
+                            {getCategoryIcon(sortedExpenseCategories[activeChartIndex][0])} {sortedExpenseCategories[activeChartIndex][0]}
+                          </span>
+                          <span className="text-sm font-bold text-red-500">
+                            {sortedExpenseCategories[activeChartIndex][1] >= 10000
+                              ? `${Math.round(sortedExpenseCategories[activeChartIndex][1] / 10000).toLocaleString()}만`
+                              : `${sortedExpenseCategories[activeChartIndex][1].toLocaleString()}원`}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {((sortedExpenseCategories[activeChartIndex][1] / totalExpense) * 100).toFixed(0)}%
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-xs text-gray-400">총 지출</span>
+                          <span className="text-sm font-bold text-gray-800">
+                            {Math.round(totalExpense / 10000).toLocaleString()}만
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
 
