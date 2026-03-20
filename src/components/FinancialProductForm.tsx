@@ -227,9 +227,9 @@ export function FinancialProductForm({
   };
 
   const updateHoldingAvgPrice = (id: number, avgPrice: string) => {
-    const numbers = avgPrice.replace(/[^0-9]/g, '');
-    const formatted = numbers ? Number(numbers).toLocaleString() : '';
-    setHoldings(prev => prev.map(h => h.id === id ? { ...h, avgPrice: formatted } : h));
+    // 숫자, 소수점만 허용 + 소수점 2자리까지
+    const cleaned = avgPrice.replace(/[^0-9.]/g, '').replace(/^(\d*\.?\d{0,2}).*$/, '$1');
+    setHoldings(prev => prev.map(h => h.id === id ? { ...h, avgPrice: cleaned } : h));
   };
 
   const handleCoinFetch = async () => {
@@ -304,7 +304,7 @@ export function FinancialProductForm({
             ticker: h.ticker,
             shares: parseFloat(h.shares),
             name: h.name,
-            avgPrice: h.avgPrice ? Number(h.avgPrice.replace(/,/g, '')) : undefined,
+            avgPrice: h.avgPrice ? parseFloat(h.avgPrice) : undefined,
           }))
       : undefined;
 
@@ -315,7 +315,7 @@ export function FinancialProductForm({
     // ETF 모드: 납입금 = avgPrice × shares 합산 자동 계산
     if (isHoldingsType(type) && holdingsMode === 'etf' && finalHoldings) {
       const totalCost = finalHoldings.reduce((sum, h) => {
-        return sum + (h.avgPrice ? h.avgPrice * h.shares : 0);
+        return sum + (h.avgPrice ? parseFloat(String(h.avgPrice)) * h.shares : 0);
       }, 0);
       if (totalCost > 0) finalPrincipal = Math.round(totalCost);
     }
@@ -730,7 +730,7 @@ export function FinancialProductForm({
                             </span>
                           </div>
                           {h.avgPrice && parseFloat(h.shares || '0') > 0 && (() => {
-                            const avg = Number(h.avgPrice.replace(/,/g, ''));
+                            const avg = parseFloat(h.avgPrice);
                             const qty = parseFloat(h.shares);
                             if (!avg) return null;
                             const gainLoss = (h.priceKRW - avg) * qty;
