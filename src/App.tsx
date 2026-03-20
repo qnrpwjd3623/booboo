@@ -372,10 +372,10 @@ function App() {
       const msg: BotMessage = { id: 'ai-' + Date.now(), type: advice.type, message: advice.message, emoji: advice.emoji };
       setBotMessage(msg);
       const now = new Date();
-      await supabase.from('ai_comments').upsert(
-        { type: 'bot', name: '', year: now.getFullYear(), month: now.getMonth() + 1, comment: JSON.stringify(msg), updated_at: new Date().toISOString() },
-        { onConflict: 'type,name,year,month' }
-      );
+      const y = now.getFullYear(); const m = now.getMonth() + 1;
+      await supabase.from('ai_comments').delete().eq('type', 'bot').eq('name', '').eq('year', y).eq('month', m);
+      const { error: bErr } = await supabase.from('ai_comments').insert({ type: 'bot', name: '', year: y, month: m, comment: JSON.stringify(msg) });
+      if (bErr) console.error('봇 저장 실패:', bErr);
     } finally {
       setIsLoadingAdvice(false);
     }
@@ -390,10 +390,10 @@ function App() {
       if (challengeData) {
         setMonthlyChallenge(challengeData);
         const now = new Date();
-        await supabase.from('ai_comments').upsert(
-          { type: 'challenge', name: '', year: now.getFullYear(), month: now.getMonth() + 1, comment: JSON.stringify(challengeData), updated_at: new Date().toISOString() },
-          { onConflict: 'type,name,year,month' }
-        );
+        const y = now.getFullYear(); const m = now.getMonth() + 1;
+        await supabase.from('ai_comments').delete().eq('type', 'challenge').eq('name', '').eq('year', y).eq('month', m);
+        const { error: cErr } = await supabase.from('ai_comments').insert({ type: 'challenge', name: '', year: y, month: m, comment: JSON.stringify(challengeData) });
+        if (cErr) console.error('챌린지 저장 실패:', cErr);
       }
     } finally {
       setIsLoadingChallenge(false);

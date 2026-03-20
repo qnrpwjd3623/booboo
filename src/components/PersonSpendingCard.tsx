@@ -78,12 +78,19 @@ export function PersonSpendingCard({ name, emoji, transactions, partnerName, ind
     try {
       const c = await getPersonCharacterComment(name, income, expense, topCategories, partnerName);
       setComment(c);
-      // Supabase에 upsert (같은 type+name+year+month면 덮어씀)
-      await supabase.from('ai_comments').upsert(
-        { type: 'person', name, year, month, comment: c, updated_at: new Date().toISOString() },
-        { onConflict: 'type,name,year,month' }
-      );
-    } catch {
+      // DELETE → INSERT 방식 (upsert 대신 - 더 안정적)
+      await supabase.from('ai_comments')
+        .delete()
+        .eq('type', 'person')
+        .eq('name', name)
+        .eq('year', year)
+        .eq('month', month);
+      const { error: insertError } = await supabase.from('ai_comments').insert({
+        type: 'person', name, year, month, comment: c,
+      });
+      if (insertError) console.error('AI 한마디 저장 실패:', insertError);
+    } catch (e) {
+      console.error('AI 한마디 생성 실패:', e);
       setComment('이번달 어떻게 됐더라... 🤔');
     } finally {
       setIsLoadingComment(false);
