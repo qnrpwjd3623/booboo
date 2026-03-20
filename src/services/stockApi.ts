@@ -65,9 +65,12 @@ const KOREA_TICKER_MAP: Record<string, string> = {
   '028260': '028260.KS', // 삼성물산
 };
 
-// 티커가 숫자로만 구성되면 한국 주식 (종목코드)
+// 한국 주식 종목코드 판별
+// - 순수 숫자 6자리: 005930, 360750
+// - 숫자+영문 혼합 6자리 (앞자리가 숫자): 0025N0, 0028V0 등 일부 ETF
 export function isKoreanTicker(ticker: string): boolean {
-  return /^\d+$/.test(ticker.trim());
+  const t = ticker.trim();
+  return /^\d+$/.test(t) || /^\d[A-Z0-9]{5}$/i.test(t);
 }
 
 // USD/KRW 환율 조회
