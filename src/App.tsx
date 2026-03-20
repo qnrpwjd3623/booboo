@@ -7,6 +7,7 @@ import { NetWorthChart } from '@/components/NetWorthChart';
 import { MonthlyHeatmap } from '@/components/MonthlyHeatmap';
 import { BotCard } from '@/components/BotCard';
 import { StockPortfolio } from '@/components/StockPortfolio';
+import { RetirementPortfolio } from '@/components/RetirementPortfolio';
 import { YearSelector } from '@/components/YearSelector';
 import { MonthSelector } from '@/components/MonthSelector';
 import { TransactionForm } from '@/components/TransactionForm';
@@ -833,6 +834,11 @@ function App() {
                 onEdit={openStockEdit}
                 onDelete={handleDeleteStock}
               />
+            </div>
+
+            {/* 퇴직연금 포트폴리오 (IRP/ISA/DC) */}
+            <div className="mt-6 sm:mt-8">
+              <RetirementPortfolio products={financialProducts} />
             </div>
 
             {/* 자산 & 금융상품 + 대출 현황 — 2열 그리드 (lg 이상) */}
