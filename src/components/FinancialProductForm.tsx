@@ -3,12 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Building2, Wallet, TrendingUp, Calendar, FileText,
   PiggyBank, Landmark, Shield, BarChart3, Home, Percent, Coins,
-  Search, Loader2, CheckCircle, AlertCircle, Hash
+  Search, Loader2, CheckCircle, AlertCircle, Hash, Trash2
 } from 'lucide-react';
 import { Modal } from './Modal';
 import type { FinancialProduct } from '@/types';
 import { fetchCoinPrice } from '@/services/coinApi';
 import type { CoinPrice } from '@/services/coinApi';
+import { fetchStockPrice } from '@/services/stockApi';
 
 interface FinancialProductFormProps {
   onAdd: (product: Omit<FinancialProduct, 'id'>) => void;
@@ -18,6 +19,18 @@ interface FinancialProductFormProps {
   editProduct?: FinancialProduct | null;
   partnerNames: [string, string];
 }
+
+interface HoldingEntry {
+  id: number;
+  ticker: string;
+  shares: string;
+  name: string;
+  priceKRW: number | null;
+  fetchState: 'idle' | 'loading' | 'success' | 'error';
+}
+
+const HOLDINGS_TYPES = ['irp', 'isa', 'fund'] as const;
+const isHoldingsType = (t: string) => (HOLDINGS_TYPES as readonly string[]).includes(t);
 
 const productTypes = [
   { id: 'irp',        name: 'IRP',    icon: PiggyBank,  color: 'bg-purple-100 text-purple-600', group: 'investment' },
@@ -61,6 +74,11 @@ export function FinancialProductForm({
   const [coinFetchedInfo, setCoinFetchedInfo] = useState<CoinPrice | null>(null);
   const coinFetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 투자계좌(IRP/ISA/DC) ETF 보유 목록 상태
+  const [holdings, setHoldings] = useState<HoldingEntry[]>([]);
+  const holdingTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  const nextIdRef = useRef(0);
+
   const isEditing = !!editProduct;
   const group = getGroup(type);
 
@@ -82,6 +100,18 @@ export function FinancialProductForm({
       setAddress(editProduct.address || '');
       setCoinTicker(editProduct.ticker || '');
       setCoinQuantity(editProduct.coinQuantity?.toString() || '');
+      if (isHoldingsType(editProduct.type) && editProduct.holdings) {
+        setHoldings(editProduct.holdings.map(h => ({
+          id: nextIdRef.current++,
+          ticker: h.ticker,
+          shares: h.shares.toString(),
+          name: h.name,
+          priceKRW: null,
+          fetchState: 'idle' as const,
+        })));
+      } else {
+        setHoldings([]);
+      }
     } else {
       setType('irp');
       setName('');
@@ -99,6 +129,7 @@ export function FinancialProductForm({
       setAddress('');
       setCoinTicker('');
       setCoinQuantity('');
+      setHoldings([]);
     }
     setCoinFetchState('idle');
     setCoinFetchedInfo(null);
@@ -117,6 +148,7 @@ export function FinancialProductForm({
       setCoinQuantity('');
       setCoinFetchState('idle');
       setCoinFetchedInfo(null);
+      setHoldings([]);
     }
   }, [type]);
 
@@ -141,6 +173,50 @@ export function FinancialProductForm({
       setCurrentValue(Math.round(coinFetchedInfo.currentPriceKRW * qty).toLocaleString());
     }
   }, [coinQuantity, coinFetchedInfo, type]);
+
+  // holdings 합산 → currentValue 자동 업데이트
+  useEffect(() => {
+    if (!isHoldingsType(type)) return;
+    const total = holdings.reduce((sum, h) => {
+      const qty = parseFloat(h.shares || '0');
+      return sum + (h.priceKRW && qty > 0 ? h.priceKRW * qty : 0);
+    }, 0);
+    if (total > 0) setCurrentValue(Math.round(total).toLocaleString());
+  }, [holdings, type]);
+
+  const addHolding = () => {
+    const id = nextIdRef.current++;
+    setHoldings(prev => [...prev, { id, ticker: '', shares: '', name: '', priceKRW: null, fetchState: 'idle' }]);
+  };
+
+  const removeHolding = (id: number) => {
+    if (holdingTimersRef.current.has(id)) {
+      clearTimeout(holdingTimersRef.current.get(id)!);
+      holdingTimersRef.current.delete(id);
+    }
+    setHoldings(prev => prev.filter(h => h.id !== id));
+  };
+
+  const updateHoldingTicker = (id: number, ticker: string) => {
+    setHoldings(prev => prev.map(h => h.id === id ? { ...h, ticker, fetchState: 'idle', priceKRW: null, name: '' } : h));
+    if (holdingTimersRef.current.has(id)) clearTimeout(holdingTimersRef.current.get(id)!);
+    if (!ticker) return;
+    const timer = setTimeout(async () => {
+      setHoldings(prev => prev.map(h => h.id === id ? { ...h, fetchState: 'loading' } : h));
+      const result = await fetchStockPrice(ticker);
+      setHoldings(prev => prev.map(h => h.id === id
+        ? result
+          ? { ...h, name: result.name, priceKRW: result.currentPrice, fetchState: 'success' }
+          : { ...h, fetchState: 'error' }
+        : h
+      ));
+    }, 800);
+    holdingTimersRef.current.set(id, timer);
+  };
+
+  const updateHoldingShares = (id: number, shares: string) => {
+    setHoldings(prev => prev.map(h => h.id === id ? { ...h, shares } : h));
+  };
 
   const handleCoinFetch = async () => {
     if (!coinTicker) return;
@@ -203,6 +279,12 @@ export function FinancialProductForm({
     e.preventDefault();
     if (!isValid) return;
 
+    const finalHoldings = isHoldingsType(type)
+      ? holdings
+          .filter(h => h.ticker && parseFloat(h.shares || '0') > 0)
+          .map(h => ({ ticker: h.ticker, shares: parseFloat(h.shares), name: h.name }))
+      : undefined;
+
     let finalPrincipal = principalNum;
     let finalCurrentValue = currentValueNum;
     let finalReturnRate = 0;
@@ -239,6 +321,7 @@ export function FinancialProductForm({
       address: group === 'realestate' ? (address || undefined) : undefined,
       ticker: type === 'coin' ? coinTicker.toUpperCase() : undefined,
       coinQuantity: type === 'coin' ? parseFloat(coinQuantity || '0') : undefined,
+      holdings: finalHoldings,
     };
 
     if (isEditing && editProduct && onUpdate) {
@@ -442,8 +525,8 @@ export function FinancialProductForm({
             </motion.div>
           )}
 
-          {/* 투자상품 (IRP/ISA/연금/펀드): 원금 + 현재 평가액 */}
-          {group === 'investment' && type !== 'coin' && (
+          {/* 투자상품 (연금저축): 원금 + 현재 평가액 */}
+          {group === 'investment' && type !== 'coin' && !isHoldingsType(type) && (
             <motion.div
               key="investment"
               initial={{ opacity: 0, y: 4 }}
@@ -473,6 +556,104 @@ export function FinancialProductForm({
                     value={currentValue}
                     onChange={(e) => setCurrentValue(formatNumber(e.target.value))}
                     placeholder="12,000,000"
+                    className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
+                  />
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* IRP/ISA/DC퇴직금: ETF 보유 목록 */}
+          {isHoldingsType(type) && (
+            <motion.div key="holdings" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-700">보유 ETF 목록</label>
+                <button type="button" onClick={addHolding} className="text-xs text-blue-600 hover:text-blue-700 font-medium px-3 py-1.5 bg-blue-50 hover:bg-blue-100 rounded-lg transition-all">
+                  + ETF 추가
+                </button>
+              </div>
+
+              {holdings.length === 0 && (
+                <div className="py-6 text-center border-2 border-dashed border-gray-200 rounded-xl">
+                  <p className="text-sm text-gray-400">ETF 추가 버튼을 눌러 보유 종목을 입력하세요</p>
+                  <p className="text-xs text-gray-300 mt-1">현재 평가액이 자동으로 계산됩니다</p>
+                </div>
+              )}
+
+              {holdings.map(h => (
+                <div key={h.id} className="p-3 bg-gray-50 rounded-xl space-y-2">
+                  <div className="flex gap-2">
+                    {/* 티커 입력 */}
+                    <div className="flex-1 relative">
+                      <input
+                        type="text"
+                        value={h.ticker}
+                        onChange={(e) => updateHoldingTicker(h.id, e.target.value.replace(/\s/g, '').toUpperCase())}
+                        placeholder="069500 또는 QQQ"
+                        className="w-full pl-3 pr-8 py-2 text-sm bg-white rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      />
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                        {h.fetchState === 'loading' && <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />}
+                        {h.fetchState === 'success' && <CheckCircle className="w-4 h-4 text-green-500" />}
+                        {h.fetchState === 'error' && <AlertCircle className="w-4 h-4 text-red-400" />}
+                      </div>
+                    </div>
+                    {/* 수량 */}
+                    <input
+                      type="number"
+                      value={h.shares}
+                      onChange={(e) => updateHoldingShares(h.id, e.target.value)}
+                      placeholder="수량"
+                      min="0"
+                      step="1"
+                      className="w-20 px-3 py-2 text-sm bg-white rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                    {/* 삭제 */}
+                    <button type="button" onClick={() => removeHolding(h.id)} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {/* 조회 결과 */}
+                  {h.fetchState === 'success' && h.priceKRW && (
+                    <div className="flex justify-between items-center text-xs px-1">
+                      <span className="text-gray-500 truncate mr-2">{h.name}</span>
+                      <span className="text-gray-700 font-medium whitespace-nowrap">
+                        {h.priceKRW.toLocaleString()}원
+                        {parseFloat(h.shares || '0') > 0 && (
+                          <span className="text-blue-600 ml-1">× {h.shares} = {Math.round(h.priceKRW * parseFloat(h.shares)).toLocaleString()}원</span>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                  {h.fetchState === 'error' && (
+                    <p className="text-xs text-red-500 px-1">종목코드를 확인하세요 (국내: 6자리 숫자, 미국ETF: 영문)</p>
+                  )}
+                </div>
+              ))}
+
+              {/* 합산 */}
+              {holdings.some(h => h.priceKRW && parseFloat(h.shares || '0') > 0) && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 bg-blue-50 rounded-xl flex justify-between items-center">
+                  <span className="text-sm text-blue-700 font-medium">ETF 합산 평가액</span>
+                  <span className="text-sm text-blue-800 font-bold">
+                    {Math.round(holdings.reduce((sum, h) => {
+                      const qty = parseFloat(h.shares || '0');
+                      return sum + (h.priceKRW && qty > 0 ? h.priceKRW * qty : 0);
+                    }, 0)).toLocaleString()}원
+                  </span>
+                </motion.div>
+              )}
+
+              {/* 납입금 원금 - holdings 타입에서도 유지 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">납입금 (원금)</label>
+                <div className="relative">
+                  <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={principal}
+                    onChange={(e) => setPrincipal(formatNumber(e.target.value))}
+                    placeholder="10,000,000"
                     className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
                   />
                 </div>

@@ -46,6 +46,13 @@ export interface StockItem {
   owner: string; // 파트너 이름 or 'shared'
 }
 
+// ETF 보유 종목 (IRP/ISA/DC퇴직금 계좌)
+export interface ProductHolding {
+  ticker: string;    // 종목코드 (e.g., 069500) or US ETF (e.g., QQQ)
+  shares: number;    // 보유 수량
+  name: string;      // 종목명 (auto-filled)
+}
+
 // 금융상품 / 자산 (IRP, ISA, 연금저축, 펀드, 예금, 적금, 부동산)
 export interface FinancialProduct {
   id: string;
@@ -67,6 +74,7 @@ export interface FinancialProduct {
   address?: string;       // 부동산 주소
   ticker?: string;        // 코인 티커 (BTC, ETH 등)
   coinQuantity?: number;  // 코인 보유 수량
+  holdings?: ProductHolding[];  // ETF 보유 목록 (IRP/ISA/DC)
 }
 
 // 대출
