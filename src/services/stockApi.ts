@@ -9,24 +9,41 @@ export interface StockPrice {
   lastUpdated: string;
 }
 
-// CORS 프록시 목록 (순서대로 폴백)
 const YAHOO_FINANCE_API_BASE = 'https://query1.finance.yahoo.com/v8/finance/chart/';
-const PROXY_LIST = [
-  (url: string) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-  (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-  (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-  (url: string) => `https://thingproxy.freeboard.io/fetch/${url}`,
+
+// 각 프록시는 parsed JSON을 반환하는 async 함수
+// - allorigins /get : { contents: "..." } 래핑 → JSON.parse(wrapper.contents)
+// - allorigins /raw : 직접 JSON (불안정하지만 폴백)
+// - yacdn.org       : 직접 JSON
+type ProxyFetcher = (url: string) => Promise<Record<string, unknown>>;
+
+const PROXY_FETCHERS: ProxyFetcher[] = [
+  async (url) => {
+    const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(7000) });
+    if (!res.ok) throw new Error(`allorigins/get HTTP ${res.status}`);
+    const wrapper = await res.json();
+    return JSON.parse(wrapper.contents);
+  },
+  async (url) => {
+    const res = await fetch(`https://yacdn.org/proxy/${url}`, { signal: AbortSignal.timeout(7000) });
+    if (!res.ok) throw new Error(`yacdn HTTP ${res.status}`);
+    return res.json();
+  },
+  async (url) => {
+    const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(7000) });
+    if (!res.ok) throw new Error(`allorigins/raw HTTP ${res.status}`);
+    return res.json();
+  },
 ];
 
-// 프록시를 순서대로 시도 — 첫 번째 성공한 응답 반환
-async function fetchWithProxy(path: string): Promise<Response> {
+// 프록시를 순서대로 시도 — 파싱된 JSON 반환
+async function fetchYahooData(path: string): Promise<Record<string, unknown>> {
   const fullUrl = `${YAHOO_FINANCE_API_BASE}${path}`;
   let lastError: unknown;
-  for (const proxyFn of PROXY_LIST) {
+  for (const proxyFn of PROXY_FETCHERS) {
     try {
-      const res = await fetch(proxyFn(fullUrl), { signal: AbortSignal.timeout(5000) });
-      if (res.ok) return res;
-      lastError = new Error(`HTTP ${res.status}`);
+      const data = await proxyFn(fullUrl);
+      if (data) return data;
     } catch (e) {
       lastError = e;
     }
@@ -56,16 +73,22 @@ export function isKoreanTicker(ticker: string): boolean {
 // USD/KRW 환율 조회
 export async function fetchUSDToKRW(): Promise<number> {
   try {
-    const response = await fetchWithProxy('USDKRW=X?interval=1d&range=1d');
-    const data = await response.json();
-    const result = data.chart?.result?.[0];
-    const quote = result?.indicators?.quote?.[0];
-    if (!quote?.close) return 1350;
-    const closes = quote.close.filter((v: number | null) => v != null);
-    return closes.length > 0 ? Math.round(closes[closes.length - 1]) : 1350;
+    const data = await fetchYahooData('USDKRW=X?interval=1d&range=1d');
+    return parseUSDKRW(data);
   } catch {
     return 1350; // fallback rate
   }
+}
+
+// USD/KRW 파서
+function parseUSDKRW(data: Record<string, unknown>): number {
+  const chart = data.chart as Record<string, unknown> | undefined;
+  const results = chart?.result as Array<Record<string, unknown>> | undefined;
+  if (!results?.[0]) return 1350;
+  const indicators = results[0].indicators as Record<string, unknown>;
+  const quote = (indicators?.quote as Array<Record<string, unknown>>)?.[0];
+  const closes = (quote?.close as (number | null)[] | undefined)?.filter((v) => v != null) ?? [];
+  return closes.length > 0 ? Math.round(closes[closes.length - 1]) : 1350;
 }
 
 // Yahoo Finance 공통 파서 (null 값 안전하게 처리)
@@ -109,8 +132,7 @@ function parseYahooChart(data: Record<string, unknown>, originalTicker: string):
 // 미국 주식 가격 조회 (달러 단위)
 export async function fetchUSStockPrice(ticker: string): Promise<StockPrice | null> {
   try {
-    const response = await fetchWithProxy(`${ticker.toUpperCase()}?interval=1d&range=1d`);
-    const data = await response.json();
+    const data = await fetchYahooData(`${ticker.toUpperCase()}?interval=1d&range=1d`);
     return parseYahooChart(data, ticker.toUpperCase());
   } catch (error) {
     console.error('Error fetching US stock price:', error);
@@ -137,8 +159,7 @@ export async function fetchStockPrice(ticker: string): Promise<StockPrice | null
 
     // 한국 주식 — parseYahooChart로 null 안전하게 처리
     const yahooTicker = KOREA_TICKER_MAP[ticker] || `${ticker}.KS`;
-    const response = await fetchWithProxy(`${yahooTicker}?interval=1d&range=1d`);
-    const data = await response.json();
+    const data = await fetchYahooData(`${yahooTicker}?interval=1d&range=1d`);
     return parseYahooChart(data, ticker);
   } catch (error) {
     console.error('Error fetching stock price:', error);
