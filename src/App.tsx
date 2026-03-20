@@ -1224,7 +1224,12 @@ function FinancialProductsList({
                       {typeLabels[product.type]}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{product.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{product.name}</p>
+                        {product.owner && product.owner !== 'shared' && (
+                          <span className="flex-shrink-0 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-50 text-indigo-500">{product.owner}</span>
+                        )}
+                      </div>
                       <p className="text-xs text-gray-500 truncate">{product.company}</p>
                     </div>
                     <div className="text-right flex-shrink-0">

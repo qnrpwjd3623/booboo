@@ -138,7 +138,12 @@ export function RetirementPortfolio({ products }: RetirementPortfolioProps) {
                       {TYPE_LABEL[account.type] ?? account.type.toUpperCase()}
                     </div>
                     <div>
-                      <p className="font-semibold text-gray-900 text-sm sm:text-base">{account.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-semibold text-gray-900 text-sm sm:text-base">{account.name}</p>
+                        {account.owner && account.owner !== 'shared' && (
+                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-50 text-indigo-500">{account.owner}</span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-1 text-xs text-gray-500">
                         <Building2 className="w-3 h-3" />
                         <span>{account.company}</span>

@@ -73,7 +73,12 @@ export function StockPortfolio({ stocks, onEdit, onDelete }: StockPortfolioProps
                     {stock.ticker.slice(0, 2)}
                   </div>
                   <div>
-                    <p className="font-semibold text-gray-900 text-sm sm:text-base">{stock.name}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-semibold text-gray-900 text-sm sm:text-base">{stock.name}</p>
+                      {stock.owner && stock.owner !== 'shared' && (
+                        <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-50 text-indigo-500">{stock.owner}</span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-500">{stock.ticker} · {stock.shares}주</p>
                   </div>
                 </div>
