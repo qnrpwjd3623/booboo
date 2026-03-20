@@ -33,7 +33,7 @@ export function MonthSelector({ selectedMonth, onMonthChange }: MonthSelectorPro
         left = window.innerWidth - dropdownWidth - 8;
       }
       setDropdownPos({
-        top: rect.bottom + window.scrollY + 8,
+        top: rect.bottom + 8,  // fixed 포지션이므로 scrollY 불필요
         left: Math.max(8, left),
       });
     }

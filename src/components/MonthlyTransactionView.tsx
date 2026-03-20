@@ -1,10 +1,17 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Plus, Pencil, Trash2, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, ImagePlus, ArrowUp, ArrowDown } from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import type { Transaction, CustomCategory } from '@/types';
 import { getCategoryIcon } from '@/constants/categories';
 import { PersonSpendingCard } from './PersonSpendingCard';
 import { ImageImportModal } from './ImageImportModal';
+
+const CHART_COLORS = [
+  '#FF6B6B','#FF9F43','#FECA57','#48DBFB','#1DD1A1',
+  '#5F27CD','#FF9FF3','#54A0FF','#01CBC6','#C8D6E5',
+  '#EE5A24','#0652DD','#9980FA','#FDA7DF','#D980FA',
+];
 
 interface MonthlyTransactionViewProps {
   year: number;
@@ -264,21 +271,66 @@ export function MonthlyTransactionView({
           {/* 카테고리별 지출 합산 */}
           {sortedExpenseCategories.length > 0 && (
             <div className="mb-4 pb-4 border-b border-gray-100">
-              <p className="text-xs text-gray-400 mb-2">
+              <p className="text-xs text-gray-400 mb-3">
                 카테고리별 지출 <span className="text-gray-300">({summaryScopeLabel})</span>
               </p>
-              <div className="flex flex-wrap gap-2">
-                {sortedExpenseCategories.map(([cat, amount]) => (
-                  <div key={cat} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 rounded-xl">
-                    <span className="text-sm">{getCategoryIcon(cat)}</span>
-                    <span className="text-xs text-gray-600 font-medium">{cat}</span>
-                    <span className="text-xs font-bold text-red-500">
-                      {amount >= 10000
-                        ? `${Math.round(amount / 10000).toLocaleString()}만`
-                        : `${amount.toLocaleString()}원`}
+              <div className="flex flex-col sm:flex-row gap-4 items-center">
+                {/* 도넛 차트 */}
+                <div className="relative flex-shrink-0 w-36 h-36">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={sortedExpenseCategories.map(([cat, amt]) => ({ name: cat, value: amt }))}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={42}
+                        outerRadius={62}
+                        paddingAngle={2}
+                        dataKey="value"
+                        strokeWidth={0}
+                      >
+                        {sortedExpenseCategories.map((_, i) => (
+                          <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value: number, name: string) => [
+                          value >= 10000
+                            ? `${Math.round(value / 10000).toLocaleString()}만원`
+                            : `${value.toLocaleString()}원`,
+                          name,
+                        ]}
+                        contentStyle={{ fontSize: 12, borderRadius: 8, border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  {/* 중앙 총합 */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-xs text-gray-400">총 지출</span>
+                    <span className="text-sm font-bold text-gray-800">
+                      {Math.round(totalExpense / 10000).toLocaleString()}만
                     </span>
                   </div>
-                ))}
+                </div>
+
+                {/* 카테고리 칩 목록 */}
+                <div className="flex flex-wrap gap-2 flex-1">
+                  {sortedExpenseCategories.map(([cat, amount], i) => (
+                    <div key={cat} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 rounded-xl">
+                      <span
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }}
+                      />
+                      <span className="text-sm">{getCategoryIcon(cat)}</span>
+                      <span className="text-xs text-gray-600 font-medium">{cat}</span>
+                      <span className="text-xs font-bold text-red-500">
+                        {amount >= 10000
+                          ? `${Math.round(amount / 10000).toLocaleString()}만`
+                          : `${amount.toLocaleString()}원`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
