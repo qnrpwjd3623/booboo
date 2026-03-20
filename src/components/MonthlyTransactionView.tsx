@@ -248,6 +248,8 @@ export function MonthlyTransactionView({
             transactions={partner1Txns}
             partnerName={partnerNames[1]}
             index={0}
+            year={year}
+            month={month}
           />
           <PersonSpendingCard
             name={partnerNames[1]}
@@ -255,6 +257,8 @@ export function MonthlyTransactionView({
             transactions={partner2Txns}
             partnerName={partnerNames[0]}
             index={1}
+            year={year}
+            month={month}
           />
         </div>
 

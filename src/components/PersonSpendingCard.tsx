@@ -11,6 +11,8 @@ interface PersonSpendingCardProps {
   transactions: Transaction[]; // 이 사람의 트랜잭션만
   partnerName: string;
   index: number; // 0 or 1 (animation delay용)
+  year: number;
+  month: number;
 }
 
 const CARD_GRADIENTS = [
@@ -18,8 +20,11 @@ const CARD_GRADIENTS = [
   'from-pink-400 to-pink-600',
 ];
 
-export function PersonSpendingCard({ name, emoji, transactions, partnerName, index }: PersonSpendingCardProps) {
-  const [comment, setComment] = useState<string>('');
+export function PersonSpendingCard({ name, emoji, transactions, partnerName, index, year, month }: PersonSpendingCardProps) {
+  const storageKey = `ai-comment-${name}-${year}-${month}`;
+  const [comment, setComment] = useState<string>(() => {
+    try { return localStorage.getItem(storageKey) ?? ''; } catch { return ''; }
+  });
   const [isLoadingComment, setIsLoadingComment] = useState(false);
 
   const income = useMemo(
@@ -57,6 +62,7 @@ export function PersonSpendingCard({ name, emoji, transactions, partnerName, ind
     try {
       const c = await getPersonCharacterComment(name, income, expense, topCategories, partnerName);
       setComment(c);
+      try { localStorage.setItem(storageKey, c); } catch {}
     } catch {
       setComment('이번달 어떻게 됐더라... 🤔');
     } finally {
