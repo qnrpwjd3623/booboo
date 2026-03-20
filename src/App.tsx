@@ -20,8 +20,8 @@ import { GoalSettingForm } from '@/components/GoalSettingForm';
 import { CoupleProfileSettings, type CoupleProfile } from '@/components/CoupleProfile';
 import { LoginPage } from '@/components/LoginPage';
 import { useSupabaseFinanceData } from '@/hooks/useSupabaseFinanceData';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/services/supabaseClient';
 import { fetchMultipleStockPrices } from '@/services/stockApi';
 import { getFinancialAdvice, getMonthlyChallenge, type FinancialContext } from '@/services/aiApi';
 import { Heart, Sparkles, Wallet, TrendingUp, PiggyBank, CreditCard, Menu, X, Settings, Target, Loader2, LogOut, GripVertical } from 'lucide-react';
@@ -146,10 +146,33 @@ function App() {
   const [isGoalOpen, setIsGoalOpen] = useState(false);
 
   const [stockPrices, setStockPrices] = useState<Record<string, { currentPrice: number }>>({});
-  const [botMessage, setBotMessage] = useLocalStorage<BotMessage | null>('booboo_bot_message', null);
-  const [monthlyChallenge, setMonthlyChallenge] = useLocalStorage<Challenge | null>('booboo_monthly_challenge', null);
+  const [botMessage, setBotMessage] = useState<BotMessage | null>(null);
+  const [monthlyChallenge, setMonthlyChallenge] = useState<Challenge | null>(null);
   const [isLoadingAdvice, setIsLoadingAdvice] = useState(false);
   const [isLoadingChallenge, setIsLoadingChallenge] = useState(false);
+
+  // 부부동산봇/챌린지 — Supabase에서 이번 달 데이터 불러오기
+  useEffect(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth() + 1;
+    const load = async () => {
+      const { data } = await supabase
+        .from('ai_comments')
+        .select('type, comment')
+        .eq('year', y)
+        .eq('month', m)
+        .in('type', ['bot', 'challenge']);
+      if (!data) return;
+      for (const row of data) {
+        try {
+          if (row.type === 'bot') setBotMessage(JSON.parse(row.comment) as BotMessage);
+          if (row.type === 'challenge') setMonthlyChallenge(JSON.parse(row.comment) as Challenge);
+        } catch {}
+      }
+    };
+    load();
+  }, []);
 
   const [isTransactionFormOpen, setIsTransactionFormOpen] = useState(false);
   const [isStockFormOpen, setIsStockFormOpen] = useState(false);
@@ -346,12 +369,13 @@ function App() {
     try {
       const context = buildFinancialContext();
       const advice = await getFinancialAdvice(context);
-      setBotMessage({
-        id: 'ai-' + Date.now(),
-        type: advice.type,
-        message: advice.message,
-        emoji: advice.emoji,
-      });
+      const msg: BotMessage = { id: 'ai-' + Date.now(), type: advice.type, message: advice.message, emoji: advice.emoji };
+      setBotMessage(msg);
+      const now = new Date();
+      await supabase.from('ai_comments').upsert(
+        { type: 'bot', name: '', year: now.getFullYear(), month: now.getMonth() + 1, comment: JSON.stringify(msg), updated_at: new Date().toISOString() },
+        { onConflict: 'type,name,year,month' }
+      );
     } finally {
       setIsLoadingAdvice(false);
     }
@@ -365,6 +389,11 @@ function App() {
       const challengeData = await getMonthlyChallenge(context);
       if (challengeData) {
         setMonthlyChallenge(challengeData);
+        const now = new Date();
+        await supabase.from('ai_comments').upsert(
+          { type: 'challenge', name: '', year: now.getFullYear(), month: now.getMonth() + 1, comment: JSON.stringify(challengeData), updated_at: new Date().toISOString() },
+          { onConflict: 'type,name,year,month' }
+        );
       }
     } finally {
       setIsLoadingChallenge(false);

@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { TrendingUp, TrendingDown, RefreshCw, Sparkles } from 'lucide-react';
 import type { Transaction } from '@/types';
 import { getCategoryIcon } from '@/constants/categories';
 import { getPersonCharacterComment } from '@/services/aiApi';
+import { supabase } from '@/services/supabaseClient';
 
 interface PersonSpendingCardProps {
   name: string;
@@ -21,11 +22,25 @@ const CARD_GRADIENTS = [
 ];
 
 export function PersonSpendingCard({ name, emoji, transactions, partnerName, index, year, month }: PersonSpendingCardProps) {
-  const storageKey = `ai-comment-${name}-${year}-${month}`;
-  const [comment, setComment] = useState<string>(() => {
-    try { return localStorage.getItem(storageKey) ?? ''; } catch { return ''; }
-  });
+  const [comment, setComment] = useState<string>('');
   const [isLoadingComment, setIsLoadingComment] = useState(false);
+
+  // Supabase에서 저장된 코멘트 불러오기
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const { data } = await supabase
+        .from('ai_comments')
+        .select('comment')
+        .eq('name', name)
+        .eq('year', year)
+        .eq('month', month)
+        .maybeSingle();
+      if (!cancelled && data?.comment) setComment(data.comment);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [name, year, month]);
 
   const income = useMemo(
     () => transactions.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0),
@@ -62,7 +77,11 @@ export function PersonSpendingCard({ name, emoji, transactions, partnerName, ind
     try {
       const c = await getPersonCharacterComment(name, income, expense, topCategories, partnerName);
       setComment(c);
-      try { localStorage.setItem(storageKey, c); } catch {}
+      // Supabase에 upsert (같은 name+year+month면 덮어씀)
+      await supabase.from('ai_comments').upsert(
+        { name, year, month, comment: c, updated_at: new Date().toISOString() },
+        { onConflict: 'name,year,month' }
+      );
     } catch {
       setComment('이번달 어떻게 됐더라... 🤔');
     } finally {
