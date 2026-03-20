@@ -969,7 +969,7 @@ function FinancialProductsList({
     irp: 'IRP',
     isa: 'ISA',
     pension: '연금저축',
-    fund: '펀드',
+    fund: 'DC퇴직금',
     deposit: '예금',
     savings: '적금',
     realestate: '부동산',
