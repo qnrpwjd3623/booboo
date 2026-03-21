@@ -389,16 +389,41 @@ function App() {
       const challengeData = await getMonthlyChallenge(context);
       if (challengeData) {
         setMonthlyChallenge(challengeData);
-        const now = new Date();
-        const y = now.getFullYear(); const m = now.getMonth() + 1;
-        await supabase.from('ai_comments').delete().eq('type', 'challenge').eq('name', '').eq('year', y).eq('month', m);
-        const { error: cErr } = await supabase.from('ai_comments').insert({ type: 'challenge', name: '', year: y, month: m, comment: JSON.stringify(challengeData) });
-        if (cErr) console.error('챌린지 저장 실패:', cErr);
+        try {
+          const now = new Date();
+          const y = now.getFullYear(); const m = now.getMonth() + 1;
+          await supabase.from('ai_comments').delete().eq('type', 'challenge').eq('name', '').eq('year', y).eq('month', m);
+          const { error: cErr } = await supabase.from('ai_comments').insert({ type: 'challenge', name: '', year: y, month: m, comment: JSON.stringify(challengeData) });
+          if (cErr) console.error('챌린지 DB 저장 실패:', cErr.message, cErr.details);
+        } catch (saveErr) {
+          console.error('챌린지 저장 예외:', saveErr);
+        }
       }
+    } catch (e) {
+      console.error('챌린지 생성 실패:', e);
     } finally {
       setIsLoadingChallenge(false);
     }
   }, [buildFinancialContext]);
+
+  // 챌린지 currentReduction 실시간 계산 (카테고리 기반 지난달 vs 이번달 비교)
+  const challengeWithProgress = useMemo(() => {
+    if (!monthlyChallenge) return null;
+    const cat = monthlyChallenge.category;
+    const prevM = currentMonth - 1;
+    const prevY = prevM === 0 ? selectedYear - 1 : selectedYear;
+    const prevMAdj = prevM === 0 ? 12 : prevM;
+    const prevSpend = transactions
+      .filter(t => t.type === 'expense' && t.year === prevY && t.month === prevMAdj && t.category === cat)
+      .reduce((s, t) => s + t.amount, 0);
+    const thisSpend = transactions
+      .filter(t => t.type === 'expense' && t.year === selectedYear && t.month === currentMonth && t.category === cat)
+      .reduce((s, t) => s + t.amount, 0);
+    const currentReduction = prevSpend > 0
+      ? Math.max(0, Math.round(((prevSpend - thisSpend) / prevSpend) * 100))
+      : 0;
+    return { ...monthlyChallenge, currentReduction };
+  }, [monthlyChallenge, transactions, currentMonth, selectedYear]);
 
   const handleAddTransaction = useCallback((transaction: Omit<Transaction, 'id'>) => {
     addTransaction(transaction);
@@ -812,7 +837,7 @@ function App() {
                   currentAmount={yearlyData.currentAmount}
                   targetAmount={yearlyData.targetAmount}
                   streak={yearlyData.streak}
-                  challenge={monthlyChallenge}
+                  challenge={challengeWithProgress}
                   monthsLeft={monthsLeft}
                   onRefreshChallenge={handleRefreshChallenge}
                   isLoadingChallenge={isLoadingChallenge}
