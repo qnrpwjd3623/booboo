@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { CircularProgress } from './CircularProgress';
-import { Flame, Loader2, RefreshCw, Target, TrendingDown } from 'lucide-react';
+import { Flame, Loader2, Target, TrendingDown } from 'lucide-react';
 import { formatCurrency } from '@/utils/format';
 import type { Challenge } from '@/types';
 import { useInView } from '@/hooks/useInView';
@@ -133,22 +133,10 @@ export function GoalProgress({
         transition={{ delay: 0.8 }}
       >
         {/* 헤더 */}
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <TrendingDown className="w-4 h-4 text-blue-500" />
-            <p className="text-sm font-medium text-gray-900">이번 달 챌린지</p>
-          </div>
-          <button
-            onClick={onRefreshChallenge}
-            disabled={isLoadingChallenge}
-            className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center hover:bg-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title="챌린지 새로 받기"
-          >
-            {isLoadingChallenge
-              ? <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" />
-              : <RefreshCw className="w-3.5 h-3.5 text-blue-500" />
-            }
-          </button>
+        <div className="flex items-center gap-2 mb-2">
+          <TrendingDown className="w-4 h-4 text-blue-500" />
+          <p className="text-sm font-medium text-gray-900">이번 달 챌린지</p>
+          {isLoadingChallenge && <Loader2 className="w-3.5 h-3.5 text-blue-400 animate-spin ml-auto" />}
         </div>
 
         {challenge ? (
