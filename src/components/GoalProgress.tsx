@@ -14,7 +14,6 @@ interface GoalProgressProps {
   prevMonthAmount: number;
   thisMonthAmount: number;
   monthsLeft: number;
-  onRefreshChallenge?: () => void;
   isLoadingChallenge?: boolean;
 }
 
@@ -26,7 +25,6 @@ export function GoalProgress({
   prevMonthAmount,
   thisMonthAmount,
   monthsLeft,
-  onRefreshChallenge,
   isLoadingChallenge = false,
 }: GoalProgressProps) {
   const [ref, isInView] = useInView<HTMLDivElement>({ threshold: 0.2 });
