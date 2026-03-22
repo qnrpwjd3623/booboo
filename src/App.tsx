@@ -854,7 +854,6 @@ function App() {
                   prevMonthAmount={challengeWithProgress?.prevMonthAmount ?? 0}
                   thisMonthAmount={challengeWithProgress?.thisMonthAmount ?? 0}
                   monthsLeft={monthsLeft}
-                  onRefreshChallenge={handleRefreshChallenge}
                   isLoadingChallenge={isLoadingChallenge}
                 />
               </div>
