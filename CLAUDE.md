@@ -245,8 +245,9 @@ setDropdownPos({ top: rect.bottom + 8, left: Math.max(8, left) });
 - ✅ PersonSpendingCard AI 한마디 — DELETE+INSERT 저장 방식
 - ✅ CLAUDE.md 생성 + 전체 프로젝트 구조 기록
 
-**다음에 할 것:**
-- [ ] 챌린지 매달 1일 00:00 자동 생성 로직 구현 (앱 로드 시 날짜 체크 방식 권장)
-- [ ] RetirementPortfolio를 App.tsx에 연결 (StockPortfolio 아래에 배치)
-- [ ] 챌린지 UI에 지난달 카테고리 지출금액 hover 표시
-- [ ] AI 한마디 저장이 여전히 안 되는 경우 F12 콘솔 에러 확인 필요
+- ✅ 챌린지 매달 1일 자동 생성 로직 구현 (앱 로드 시 날짜 체크)
+- ✅ RetirementPortfolio App.tsx에 연결 (StockPortfolio 아래 배치)
+- ✅ 챌린지 UI 지난달 카테고리 지출금액 hover 표시
+- ✅ AI 한마디 Supabase 저장 정상 동작 확인
+
+**현재 미완료 작업: 없음 🎉**
