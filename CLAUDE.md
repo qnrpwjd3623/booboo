@@ -54,7 +54,7 @@ git push origin main   # push하면 Vercel 자동 배포됨
 ## Supabase 설정
 
 - **Project URL**: `https://cxyranplnsmkrayprfkw.supabase.co`
-- **Anon Key**: `sb_publishable_UPndrjURa_-1OgMA-tF9yg_xnHkz8IM`
+- **Anon Key**: `src/services/supabaseClient.ts` 파일 참고
 - **클라이언트**: `src/services/supabaseClient.ts`
 
 ### 테이블 목록
