@@ -27,3 +27,6 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+
+# Claude context (로컬 전용)
+CLAUDE.md
