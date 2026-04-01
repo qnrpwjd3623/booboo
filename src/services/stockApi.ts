@@ -9,46 +9,13 @@ export interface StockPrice {
   lastUpdated: string;
 }
 
-const YAHOO_FINANCE_API_BASE = 'https://query1.finance.yahoo.com/v8/finance/chart/';
-
-// 각 프록시는 parsed JSON을 반환하는 async 함수
-// - allorigins /get : { contents: "..." } 래핑 → JSON.parse(wrapper.contents)
-// - allorigins /raw : 직접 JSON (불안정하지만 폴백)
-// - yacdn.org       : 직접 JSON
-type ProxyFetcher = (url: string) => Promise<Record<string, unknown>>;
-
-const PROXY_FETCHERS: ProxyFetcher[] = [
-  async (url) => {
-    const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(7000) });
-    if (!res.ok) throw new Error(`allorigins/get HTTP ${res.status}`);
-    const wrapper = await res.json();
-    return JSON.parse(wrapper.contents);
-  },
-  async (url) => {
-    const res = await fetch(`https://yacdn.org/proxy/${url}`, { signal: AbortSignal.timeout(7000) });
-    if (!res.ok) throw new Error(`yacdn HTTP ${res.status}`);
-    return res.json();
-  },
-  async (url) => {
-    const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(7000) });
-    if (!res.ok) throw new Error(`allorigins/raw HTTP ${res.status}`);
-    return res.json();
-  },
-];
-
-// 프록시를 순서대로 시도 — 파싱된 JSON 반환
+// Vercel 서버리스 함수로 Yahoo Finance 호출 (CORS 프록시 불필요)
 async function fetchYahooData(path: string): Promise<Record<string, unknown>> {
-  const fullUrl = `${YAHOO_FINANCE_API_BASE}${path}`;
-  let lastError: unknown;
-  for (const proxyFn of PROXY_FETCHERS) {
-    try {
-      const data = await proxyFn(fullUrl);
-      if (data) return data;
-    } catch (e) {
-      lastError = e;
-    }
-  }
-  throw lastError ?? new Error('All proxies failed');
+  const res = await fetch(`/api/stock?ticker=${encodeURIComponent(path)}`, {
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+  return res.json();
 }
 
 // 티커 매핑 (한국 주식)
