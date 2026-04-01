@@ -880,6 +880,7 @@ function App() {
                 <NetWorthChart
                   monthlyData={yearlyData.monthlyData}
                   targetNetWorth={yearlyData.targetNetWorth}
+                  onUpdateTarget={(target) => updateYearlySettings(selectedYear, { targetNetWorth: target })}
                 />
               </div>
 

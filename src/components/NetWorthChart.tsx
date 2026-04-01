@@ -15,7 +15,7 @@ import {
   Legend,
   Cell,
 } from 'recharts';
-import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Pencil, Check, X } from 'lucide-react';
 import type { MonthlyData } from '@/types';
 import { calculateGrowthRate } from '@/utils/format';
 import { useInView } from '@/hooks/useInView';
@@ -23,6 +23,7 @@ import { useInView } from '@/hooks/useInView';
 interface NetWorthChartProps {
   monthlyData: MonthlyData[];
   targetNetWorth: number;
+  onUpdateTarget?: (value: number) => void;
 }
 
 interface CustomTooltipProps {
@@ -120,8 +121,27 @@ function BarTooltip({ active, payload, label }: BarTooltipProps) {
   return null;
 }
 
-export function NetWorthChart({ monthlyData, targetNetWorth }: NetWorthChartProps) {
+export function NetWorthChart({ monthlyData, targetNetWorth, onUpdateTarget }: NetWorthChartProps) {
   const [ref, isInView] = useInView<HTMLDivElement>({ threshold: 0.2 });
+  const [isEditingTarget, setIsEditingTarget] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const openEdit = () => {
+    setInputValue(String(Math.round(targetNetWorth / 10000)));
+    setIsEditingTarget(true);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
+  const commitEdit = () => {
+    const parsed = parseInt(inputValue.replace(/,/g, ''), 10);
+    if (!isNaN(parsed) && parsed > 0 && onUpdateTarget) {
+      onUpdateTarget(parsed * 10000);
+    }
+    setIsEditingTarget(false);
+  };
+
+  const cancelEdit = () => setIsEditingTarget(false);
 
   // Filter out future months (netWorth = 0)
   const validData = monthlyData.filter(d => d.netWorth > 0);
@@ -237,7 +257,39 @@ export function NetWorthChart({ monthlyData, targetNetWorth }: NetWorthChartProp
         </div>
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-full bg-green-500" style={{ background: 'repeating-linear-gradient(45deg, #34C759, #34C759 2px, transparent 2px, transparent 4px)' }} />
-          <span className="text-xs text-gray-500">목표 금액</span>
+          {isEditingTarget ? (
+            <div className="flex items-center gap-1">
+              <input
+                ref={inputRef}
+                type="number"
+                value={inputValue}
+                onChange={e => setInputValue(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit(); }}
+                className="w-24 text-xs border border-green-400 rounded-md px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-green-400 tabular-nums"
+                placeholder="만원"
+              />
+              <span className="text-xs text-gray-400">만원</span>
+              <button onClick={commitEdit} className="text-green-500 hover:text-green-600">
+                <Check className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={cancelEdit} className="text-gray-400 hover:text-gray-500">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={openEdit}
+              className="flex items-center gap-1 group"
+              title="목표 금액 수정"
+            >
+              <span className="text-xs text-gray-500">
+                목표 {Math.round(targetNetWorth / 100000000) > 0
+                  ? `${(targetNetWorth / 100000000).toFixed(1)}억`
+                  : `${Math.round(targetNetWorth / 10000)}만원`}
+              </span>
+              <Pencil className="w-3 h-3 text-gray-300 group-hover:text-green-500 transition-colors" />
+            </button>
+          )}
         </div>
       </div>
 
