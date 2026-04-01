@@ -289,6 +289,22 @@ function App() {
     );
   }, [selectedYear, transactions, stocks, financialProducts, loans, settings, monthlyTargets, getYearlySettings]);
 
+  // 실제 현재 연도 순자산 — selectedYear와 무관하게 항상 올해 기준 계산 (기기 간 동일 표시 보장)
+  const realCurrentYear = new Date().getFullYear();
+  const realCurrentYearData = useMemo(() => {
+    const realSettings = getYearlySettings(realCurrentYear);
+    let effectiveStart = realSettings.startNetWorth;
+    if (!effectiveStart) {
+      const prevSettings = getYearlySettings(realCurrentYear - 1);
+      const prevYearTxns = transactions.filter(t => t.year === realCurrentYear - 1);
+      const prevIncome = prevYearTxns.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+      const prevExpense = prevYearTxns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+      const prevCashEnd = prevSettings.startNetWorth + prevIncome - prevExpense;
+      if (prevCashEnd > 0) effectiveStart = prevCashEnd;
+    }
+    return generateYearlyData(realCurrentYear, transactions, stocks, financialProducts, loans, realSettings.targetNetWorth, effectiveStart, {});
+  }, [realCurrentYear, transactions, stocks, financialProducts, loans, getYearlySettings]);
+
   // 선택 연도 localStorage 저장 (새로고침/재로그인 시 복원)
   useEffect(() => {
     localStorage.setItem('booboo_selected_year', String(selectedYear));
@@ -347,7 +363,7 @@ function App() {
     }, {});
 
     return {
-      currentNetWorth: yearlyData.currentNetWorth,
+      currentNetWorth: realCurrentYearData.currentNetWorth,
       targetNetWorth: yearlyData.targetNetWorth,
       progress: yearlyData.targetAmount > 0 ? (yearlyData.currentAmount / yearlyData.targetAmount) * 100 : 0,
       streak: yearlyData.streak,
@@ -820,22 +836,22 @@ function App() {
             {/* Summary Cards */}
             <div className="mb-6 sm:mb-8">
               {(() => {
-                const nwStocks = yearlyData.stocks.reduce((s, i) => s + i.shares * i.currentPrice, 0);
-                const nwProducts = yearlyData.financialProducts.reduce((s, p) => s + p.currentValue, 0);
-                const nwDebt = yearlyData.loanDebt;
-                const nwCash = yearlyData.currentNetWorth - nwStocks - nwProducts + nwDebt;
-                const stockItems = yearlyData.stocks
+                const nwStocks = realCurrentYearData.stocks.reduce((s, i) => s + i.shares * i.currentPrice, 0);
+                const nwProducts = realCurrentYearData.financialProducts.reduce((s, p) => s + p.currentValue, 0);
+                const nwDebt = realCurrentYearData.loanDebt;
+                const nwCash = realCurrentYearData.currentNetWorth - nwStocks - nwProducts + nwDebt;
+                const stockItems = realCurrentYearData.stocks
                   .filter(i => i.shares * i.currentPrice > 0)
                   .map(i => ({ name: i.name, value: i.shares * i.currentPrice }));
-                const productItems = yearlyData.financialProducts
+                const productItems = realCurrentYearData.financialProducts
                   .filter(p => p.currentValue > 0)
                   .map(p => ({ name: p.name, value: p.currentValue }));
                 return (
                   <SummaryCards
-                    currentNetWorth={yearlyData.currentNetWorth}
+                    currentNetWorth={realCurrentYearData.currentNetWorth}
                     targetNetWorth={yearlyData.targetNetWorth}
                     averageSavingsRate={yearlyData.averageSavingsRate}
-                    previousNetWorth={yearlyData.monthlyData.find(m => m.month === currentMonth - 1)?.netWorth}
+                    previousNetWorth={realCurrentYearData.monthlyData.find(m => m.month === currentMonth - 1)?.netWorth}
                     totalLoan={nwDebt}
                     netWorthBreakdown={{ cash: nwCash, stocks: nwStocks, products: nwProducts, debt: nwDebt, stockItems, productItems }}
                   />
@@ -874,7 +890,7 @@ function App() {
                 />
                 <BotCard
                   messages={botMessage ? [botMessage] : []}
-                  currentNetWorth={yearlyData.currentNetWorth}
+                  currentNetWorth={realCurrentYearData.currentNetWorth}
                   targetNetWorth={yearlyData.targetNetWorth}
                   streak={yearlyData.streak}
                   onRefresh={handleRefreshAdvice}
