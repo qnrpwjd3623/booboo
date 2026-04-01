@@ -66,6 +66,7 @@ interface DbYearlySetting {
     target_net_worth: number;
     start_net_worth: number;
     monthly_targets: Record<number, number>;
+    chart_target_net_worth: number | null;
 }
 
 interface DbLoan {
@@ -236,7 +237,7 @@ export function useSupabaseFinanceData() {
     const [financialProducts, setFinancialProducts] = useState<FinancialProduct[]>([]);
     const [loans, setLoans] = useState<LoanItem[]>([]);
     const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
-    const [yearlySettings, setYearlySettings] = useState<Record<number, { targetNetWorth: number; startNetWorth: number; monthlyTargets?: Record<number, number> }>>({});
+    const [yearlySettings, setYearlySettings] = useState<Record<number, { targetNetWorth: number; startNetWorth: number; monthlyTargets?: Record<number, number>; chartTargetNetWorth?: number }>>({});
     const [coupleProfile, setCoupleProfile] = useState<CoupleProfileDb>(DEFAULT_PROFILE);
     const [fpOrder, setFpOrder] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -384,12 +385,13 @@ export function useSupabaseFinanceData() {
     const loadYearlySettings = async () => {
         const { data, error } = await supabase.from('yearly_settings').select('*');
         if (error) { console.error('Load yearly settings error:', error); return; }
-        const settings: Record<number, { targetNetWorth: number; startNetWorth: number; monthlyTargets?: Record<number, number> }> = {};
+        const settings: Record<number, { targetNetWorth: number; startNetWorth: number; monthlyTargets?: Record<number, number>; chartTargetNetWorth?: number }> = {};
         (data || []).forEach((row: DbYearlySetting) => {
             settings[row.year] = {
                 targetNetWorth: row.target_net_worth,
                 startNetWorth: row.start_net_worth,
                 monthlyTargets: row.monthly_targets || {},
+                chartTargetNetWorth: row.chart_target_net_worth ?? undefined,
             };
         });
         setYearlySettings(settings);
@@ -823,6 +825,7 @@ export function useSupabaseFinanceData() {
                 target_net_worth: newSettings.targetNetWorth,
                 start_net_worth: newSettings.startNetWorth,
                 monthly_targets: newSettings.monthlyTargets || {},
+                chart_target_net_worth: newSettings.chartTargetNetWorth ?? null,
             }, { onConflict: 'year' });
 
         if (error) { console.error('Update yearly settings error:', error); return; }
@@ -832,8 +835,26 @@ export function useSupabaseFinanceData() {
         }));
     }, [yearlySettings]);
 
+    const updateChartTarget = useCallback(async (year: number, value: number) => {
+        const current = yearlySettings[year] || { targetNetWorth: 100000000, startNetWorth: 0 };
+        const { error } = await supabase
+            .from('yearly_settings')
+            .upsert({
+                year,
+                target_net_worth: current.targetNetWorth,
+                start_net_worth: current.startNetWorth,
+                monthly_targets: current.monthlyTargets || {},
+                chart_target_net_worth: value,
+            }, { onConflict: 'year' });
+        if (error) { console.error('Update chart target error:', error); return; }
+        setYearlySettings(prev => ({
+            ...prev,
+            [year]: { ...current, chartTargetNetWorth: value },
+        }));
+    }, [yearlySettings]);
+
     const getYearlySettings = useCallback((year: number) => {
-        return yearlySettings[year] || { targetNetWorth: 100000000, startNetWorth: 0 };
+        return yearlySettings[year] || { targetNetWorth: 100000000, startNetWorth: 0, chartTargetNetWorth: undefined };
     }, [yearlySettings]);
 
     const updateMonthlyTarget = useCallback(async (year: number, month: number, target: number) => {
@@ -907,6 +928,7 @@ export function useSupabaseFinanceData() {
 
         // Yearly settings
         updateYearlySettings,
+        updateChartTarget,
         getYearlySettings,
 
         // Monthly targets

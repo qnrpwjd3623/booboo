@@ -229,6 +229,7 @@ function App() {
     deleteCustomCategory,
     getYearlySettings,
     updateYearlySettings,
+    updateChartTarget,
     updateMonthlyTarget,
     getMonthlyTargets,
     coupleProfile,
@@ -879,8 +880,8 @@ function App() {
               <div className="lg:col-span-5">
                 <NetWorthChart
                   monthlyData={yearlyData.monthlyData}
-                  targetNetWorth={yearlyData.targetNetWorth}
-                  onUpdateTarget={(target) => updateYearlySettings(selectedYear, { targetNetWorth: target })}
+                  chartTargetNetWorth={settings.chartTargetNetWorth}
+                  onUpdateChartTarget={(value) => updateChartTarget(selectedYear, value)}
                 />
               </div>
 
