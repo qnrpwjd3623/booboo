@@ -1,4 +1,5 @@
 
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   AreaChart,
@@ -16,7 +17,7 @@ import {
 } from 'recharts';
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import type { MonthlyData } from '@/types';
-import { formatCurrency, calculateGrowthRate } from '@/utils/format';
+import { calculateGrowthRate } from '@/utils/format';
 import { useInView } from '@/hooks/useInView';
 
 interface NetWorthChartProps {
@@ -31,30 +32,54 @@ interface CustomTooltipProps {
 }
 
 function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
-  if (active && payload && payload.length) {
-    const data = payload[0].payload;
+  const [displayValue, setDisplayValue] = useState(0);
+  const animRef = useRef<number | null>(null);
 
-    return (
-      <div className="bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] p-4 border border-gray-100">
-        <p className="text-sm font-semibold text-gray-900 mb-2">{label}</p>
-        <p className="text-lg font-bold text-gray-900 mb-1">
-          {formatCurrency(data.netWorth)}
-        </p>
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-gray-500">저축률:</span>
-          <span className={`font-medium ${data.savingsRate >= 40 ? 'text-green-500' : 'text-orange-500'}`}>
-            {data.savingsRate.toFixed(1)}%
-          </span>
-        </div>
-        {data.targetAchieved && (
-          <div className="mt-2 inline-flex items-center gap-1 px-2 py-1 bg-green-100 rounded-full">
-            <span className="text-xs font-medium text-green-600">목표 달성</span>
-          </div>
-        )}
+  const data = payload?.[0]?.payload;
+  // chartData에서 netWorth는 억 단위로 변환됨 → 다시 원 단위로 복원
+  const targetValue = data?.netWorth != null ? Math.round(data.netWorth * 100000000) : 0;
+
+  useEffect(() => {
+    if (!active || targetValue === 0) return;
+
+    const duration = 500;
+    const startTime = performance.now();
+
+    if (animRef.current) cancelAnimationFrame(animRef.current);
+
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+      setDisplayValue(Math.round(targetValue * eased));
+      if (progress < 1) animRef.current = requestAnimationFrame(animate);
+    };
+
+    animRef.current = requestAnimationFrame(animate);
+    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
+  }, [targetValue, active]);
+
+  if (!active || !payload?.length || !data) return null;
+
+  return (
+    <div className="bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] p-4 border border-gray-100 min-w-[200px]">
+      <p className="text-sm font-semibold text-gray-900 mb-2">{label}</p>
+      <p className="text-xl font-bold text-gray-900 mb-1 tabular-nums tracking-tight">
+        {displayValue.toLocaleString('ko-KR')}원
+      </p>
+      <div className="flex items-center gap-2 text-sm">
+        <span className="text-gray-500">저축률:</span>
+        <span className={`font-medium ${data.savingsRate >= 40 ? 'text-green-500' : 'text-orange-500'}`}>
+          {data.savingsRate.toFixed(1)}%
+        </span>
       </div>
-    );
-  }
-  return null;
+      {data.targetAchieved && (
+        <div className="mt-2 inline-flex items-center gap-1 px-2 py-1 bg-green-100 rounded-full">
+          <span className="text-xs font-medium text-green-600">목표 달성</span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 interface BarTooltipProps {
