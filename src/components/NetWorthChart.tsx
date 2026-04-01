@@ -325,9 +325,9 @@ export function NetWorthChart({ monthlyData, chartTargetNetWorth, onUpdateChartT
                 axisLine={false}
                 tickLine={false}
                 tick={{ fill: '#8E8E93', fontSize: 11 }}
-                tickFormatter={(v) => v >= 10000000 ? `${(v / 100000000).toFixed(1)}억` : `${Math.round(v / 10000)}만`}
+                tickFormatter={(v) => `${Math.round(v / 10000).toLocaleString('ko-KR')}만원`}
                 dx={-4}
-                width={44}
+                width={72}
               />
               <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(0,0,0,0.03)', radius: 8 }} />
               <Bar dataKey="income" name="수입" fill="#34C759" radius={[6, 6, 0, 0]}>
