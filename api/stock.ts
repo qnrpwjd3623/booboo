@@ -9,7 +9,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'ticker required' });
   }
 
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`;
+  // ticker에 이미 쿼리스트링 포함 (예: 005930.KS?interval=1d&range=1d)
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`;
 
   try {
     const response = await fetch(url, {
