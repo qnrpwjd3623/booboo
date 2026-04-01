@@ -238,6 +238,7 @@ export function useSupabaseFinanceData() {
     const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
     const [yearlySettings, setYearlySettings] = useState<Record<number, { targetNetWorth: number; startNetWorth: number; monthlyTargets?: Record<number, number> }>>({});
     const [coupleProfile, setCoupleProfile] = useState<CoupleProfileDb>(DEFAULT_PROFILE);
+    const [fpOrder, setFpOrder] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     // ========== 초기 데이터 로드 ==========
@@ -263,6 +264,7 @@ export function useSupabaseFinanceData() {
             partner2Emoji: data.partner2_emoji || '👩',
             coupleName: data.couple_name || '우리 가계부',
         });
+        if (Array.isArray(data.fp_order)) setFpOrder(data.fp_order as string[]);
     };
 
     const updateCoupleProfile = useCallback(async (newProfile: CoupleProfileDb) => {
@@ -311,6 +313,15 @@ export function useSupabaseFinanceData() {
         }
         setCoupleProfile(newProfile);
     }, [coupleProfile]);
+
+    const updateFpOrder = useCallback(async (order: string[]) => {
+        setFpOrder(order);
+        const { data: allRows } = await supabase.from('couple_profiles').select('id').order('created_at', { ascending: true });
+        const existingId = allRows?.[0]?.id ?? null;
+        if (existingId) {
+            await supabase.from('couple_profiles').update({ fp_order: order }).eq('id', existingId);
+        }
+    }, []);
 
     const loadAllData = async () => {
         setIsLoading(true);
@@ -910,6 +921,8 @@ export function useSupabaseFinanceData() {
         // Couple profile
         coupleProfile,
         updateCoupleProfile,
+        fpOrder,
+        updateFpOrder,
 
         // Refresh
         refreshData: loadAllData,

@@ -233,6 +233,8 @@ function App() {
     getMonthlyTargets,
     coupleProfile,
     updateCoupleProfile,
+    fpOrder,
+    updateFpOrder,
   } = useSupabaseFinanceData();
 
   // couple profile — DB에서 로드, 변경 시 DB에 저장 (기기간 동기화)
@@ -921,6 +923,8 @@ function App() {
                     products={financialProducts}
                     onEdit={openProductEdit}
                     onDelete={handleDeleteProduct}
+                    fpOrder={fpOrder}
+                    onFpOrderChange={updateFpOrder}
                   />
                 )}
                 {loans.length > 0 && (
@@ -1035,13 +1039,16 @@ interface FPDragInfo {
 function FinancialProductsList({
   products,
   onEdit,
-  onDelete
+  onDelete,
+  fpOrder,
+  onFpOrderChange,
 }: {
   products: FinancialProduct[];
   onEdit: (product: FinancialProduct) => void;
   onDelete: (id: string) => void;
+  fpOrder: string[];
+  onFpOrderChange: (order: string[]) => void;
 }) {
-  const FP_ORDER_KEY = 'fp-order';
 
   const typeLabels: Record<string, string> = {
     irp: 'IRP',
@@ -1063,14 +1070,8 @@ function FinancialProductsList({
     realestate: 'bg-amber-100 text-amber-600',
   };
 
-  // Ordered IDs, persisted to localStorage
-  const [orderedIds, setOrderedIds] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem(FP_ORDER_KEY);
-      if (saved) return JSON.parse(saved) as string[];
-    } catch {}
-    return products.map(p => p.id);
-  });
+  // Ordered IDs from Supabase (기기 간 동기화)
+  const orderedIds = fpOrder.length > 0 ? fpOrder : products.map(p => p.id);
 
   // Merge: keep saved order for existing items, append new ones at the end
   const orderedProducts = useMemo(() => {
@@ -1125,8 +1126,7 @@ function FinancialProductsList({
         const newOrder = prods.map(p => p.id);
         newOrder.splice(fromIdx, 1);
         newOrder.splice(overIndex, 0, productId);
-        localStorage.setItem(FP_ORDER_KEY, JSON.stringify(newOrder));
-        setOrderedIds(newOrder);
+        onFpOrderChange(newOrder);
       }
     }
     document.body.style.userSelect = '';
