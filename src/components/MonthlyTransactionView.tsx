@@ -53,6 +53,7 @@ export function MonthlyTransactionView({
   customCategories,
 }: MonthlyTransactionViewProps) {
   const [filterOwner, setFilterOwner] = useState<string>('all');
+  const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
   const [activeChartIndex, setActiveChartIndex] = useState<number | null>(null);
   const [isImageImportOpen, setIsImageImportOpen] = useState(false);
   const [sortBy, setSortBy] = useState<'date' | 'amount'>('date');
@@ -82,9 +83,9 @@ export function MonthlyTransactionView({
   // 목록 필터 + 정렬
   const filteredTxns = monthTxns
     .filter((t) => {
-      if (filterOwner === 'all') return true;
-      if (filterOwner === 'shared') return t.owner === 'shared';
-      return t.owner === filterOwner;
+      const ownerMatch = filterOwner === 'all' || t.owner === filterOwner;
+      const typeMatch = filterType === 'all' || t.type === filterType;
+      return ownerMatch && typeMatch;
     })
     .sort((a, b) => {
       const dir = sortDir === 'desc' ? -1 : 1;
@@ -96,13 +97,12 @@ export function MonthlyTransactionView({
     { id: 'all', label: '전체' },
     { id: partnerNames[0], label: partnerNames[0] },
     { id: partnerNames[1], label: partnerNames[1] },
-    { id: 'shared', label: '공동' },
   ];
 
-  // 카테고리 요약: 공동/전체 탭은 두 사람 합산, 개인 탭은 해당 사람만
-  const summaryScopeLabel = filterOwner === 'shared' ? '합산' : filterOwner === 'all' ? '합산' : filterOwner;
+  // 카테고리 요약: 전체 탭은 두 사람 합산, 개인 탭은 해당 사람만
+  const summaryScopeLabel = filterOwner === 'all' ? '합산' : filterOwner;
   const summaryTxns =
-    filterOwner === 'all' || filterOwner === 'shared'
+    filterOwner === 'all'
       ? monthTxns
       : monthTxns.filter((t) => t.owner === filterOwner);
   const expenseByCategory = summaryTxns
@@ -365,6 +365,7 @@ export function MonthlyTransactionView({
 
           {/* 필터 탭 + 정렬 */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
+            {/* 소유자 필터 */}
             {filterTabs.map((tab) => (
               <button
                 key={tab.id}
@@ -379,8 +380,34 @@ export function MonthlyTransactionView({
               </button>
             ))}
 
-            {/* 정렬 버튼 */}
             <div className="flex items-center gap-1 ml-auto">
+              {/* 수입/지출 타입 필터 */}
+              {([
+                { id: 'all', label: '전체' },
+                { id: 'income', label: '수입' },
+                { id: 'expense', label: '지출' },
+              ] as const).map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setFilterType(tab.id)}
+                  className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                    filterType === tab.id
+                      ? tab.id === 'income'
+                        ? 'bg-green-500 text-white shadow-sm'
+                        : tab.id === 'expense'
+                        ? 'bg-red-500 text-white shadow-sm'
+                        : 'bg-gray-800 text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+
+              {/* 구분선 */}
+              <div className="w-px h-4 bg-gray-200 mx-0.5" />
+
+              {/* 정렬 버튼 */}
               {(['date', 'amount'] as const).map((type) => {
                 const isActive = sortBy === type;
                 const label = type === 'date' ? '날짜순' : '금액순';

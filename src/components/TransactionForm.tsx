@@ -54,6 +54,7 @@ export function TransactionForm({
   const [editingCatKey, setEditingCatKey] = useState<string | null>(null);
   const [editCatEmoji, setEditCatEmoji] = useState('');
   const [editCatName, setEditCatName] = useState('');
+  const [isSavingCat, setIsSavingCat] = useState(false);
 
   useEffect(() => {
     if (editTransaction) {
@@ -75,6 +76,7 @@ export function TransactionForm({
     setNewCatEmoji('📌');
     setNewCatName('');
     setEditingCatKey(null);
+    setIsSavingCat(false);
   }, [editTransaction, year, month, isOpen]);
 
   const handleTypeChange = (newType: TransactionType) => {
@@ -154,44 +156,60 @@ export function TransactionForm({
   // ── 저장 ──
   const handleSaveEdit = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!editingCatKey || !editCatName.trim()) return;
+    if (!editingCatKey || !editCatName.trim() || isSavingCat) return;
     const newName = editCatName.trim();
+    setIsSavingCat(true);
 
-    if (editingCatKey.startsWith('builtin:')) {
-      const builtinId = editingCatKey.slice(8);
-      const originalLabel = baseCategories.find(b => b.id === builtinId)?.label ?? builtinId;
-      const nameChanged = newName !== originalLabel;
+    try {
+      if (editingCatKey.startsWith('builtin:')) {
+        const builtinId = editingCatKey.slice(8);
+        const originalLabel = baseCategories.find(b => b.id === builtinId)?.label ?? builtinId;
+        const nameChanged = newName !== originalLabel;
 
-      if (nameChanged) {
-        // 이름이 바뀌면: 기존 거래 모두 새 이름으로 업데이트 + 새 커스텀 카테고리 생성 + 기존 빌트인 숨김
-        await onRenameCategory?.(builtinId, newName);
-        await onAddCustomCategory?.({ name: newName, type, icon: editCatEmoji });
-        const existing = builtinOverrideMap.get(builtinId);
-        if (existing) {
-          await onUpdateCustomCategory?.(existing.id, { hidden: true });
+        if (nameChanged) {
+          // 이름이 바뀌면: 기존 거래 모두 새 이름으로 업데이트 + 새 커스텀 카테고리 생성 + 기존 빌트인 숨김
+          await onRenameCategory?.(builtinId, newName);
+
+          // 이미 같은 이름의 커스텀 카테고리가 없을 때만 생성
+          const alreadyExists = customOfType.some(c => c.name === newName && !c.hidden);
+          if (!alreadyExists) {
+            await onAddCustomCategory?.({ name: newName, type, icon: editCatEmoji });
+          } else {
+            // 이미 존재하면 아이콘만 업데이트
+            const existingNew = customOfType.find(c => c.name === newName && !c.hidden);
+            if (existingNew) await onUpdateCustomCategory?.(existingNew.id, { icon: editCatEmoji });
+          }
+
+          // 원래 빌트인을 숨김 처리
+          const existing = builtinOverrideMap.get(builtinId);
+          if (existing) {
+            await onUpdateCustomCategory?.(existing.id, { hidden: true });
+          } else {
+            await onAddCustomCategory?.({ name: builtinId, type, icon: editCatEmoji, hidden: true });
+          }
+          if (category === builtinId) setCategory(newName);
         } else {
-          await onAddCustomCategory?.({ name: builtinId, type, icon: editCatEmoji, hidden: true });
+          // 이름 동일 → 이모지만 업데이트
+          const existing = builtinOverrideMap.get(builtinId);
+          if (existing) {
+            await onUpdateCustomCategory?.(existing.id, { icon: editCatEmoji });
+          } else {
+            await onAddCustomCategory?.({ name: builtinId, type, icon: editCatEmoji });
+          }
         }
-        if (category === builtinId) setCategory(newName);
       } else {
-        // 이름 동일 → 이모지만 업데이트
-        const existing = builtinOverrideMap.get(builtinId);
-        if (existing) {
-          await onUpdateCustomCategory?.(existing.id, { icon: editCatEmoji, hidden: false });
-        } else {
-          await onAddCustomCategory?.({ name: builtinId, type, icon: editCatEmoji });
-        }
+        const catId = editingCatKey.slice(7);
+        const cat = trueCustomCategories.find((c) => c.id === catId);
+        if (!cat) return;
+        const oldName = cat.name;
+        if (newName !== oldName) await onRenameCategory?.(oldName, newName);
+        await onUpdateCustomCategory?.(catId, { name: newName, icon: editCatEmoji });
+        if (category === oldName) setCategory(newName);
       }
-    } else {
-      const catId = editingCatKey.slice(7);
-      const cat = trueCustomCategories.find((c) => c.id === catId);
-      if (!cat) return;
-      const oldName = cat.name;
-      if (newName !== oldName) await onRenameCategory?.(oldName, newName);
-      await onUpdateCustomCategory?.(catId, { name: newName, icon: editCatEmoji });
-      if (category === oldName) setCategory(newName);
+    } finally {
+      setIsSavingCat(false);
+      setEditingCatKey(null);
     }
-    setEditingCatKey(null);
   };
 
   // ── 삭제/숨김 ──
@@ -281,7 +299,7 @@ export function TransactionForm({
                   onClick={(e) => e.stopPropagation()}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSaveEdit(e as unknown as React.MouseEvent); } if (e.key === 'Escape') setEditingCatKey(null); }}
                   className="flex-1 px-2 py-1 bg-white rounded-lg text-sm border border-gray-200 focus:outline-none" />
-                <button type="button" onClick={handleSaveEdit} disabled={!editCatName.trim()}
+                <button type="button" onClick={handleSaveEdit} disabled={!editCatName.trim() || isSavingCat}
                   className="w-7 h-7 flex items-center justify-center bg-blue-500 text-white rounded-lg disabled:opacity-50">
                   <Check className="w-3.5 h-3.5" />
                 </button>

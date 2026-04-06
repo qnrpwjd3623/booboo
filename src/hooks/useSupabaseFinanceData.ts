@@ -781,7 +781,7 @@ export function useSupabaseFinanceData() {
     const addCustomCategory = useCallback(async (cat: Omit<CustomCategory, 'id'>): Promise<CustomCategory | undefined> => {
         const { data, error } = await supabase
             .from('custom_categories')
-            .insert({ name: cat.name, type: cat.type, icon: cat.icon || null })
+            .insert({ name: cat.name, type: cat.type, icon: cat.icon || null, hidden: cat.hidden ?? false })
             .select()
             .single();
 
@@ -800,9 +800,13 @@ export function useSupabaseFinanceData() {
     }, []);
 
     const updateCustomCategory = useCallback(async (id: string, updates: Partial<Omit<CustomCategory, 'id'>>) => {
+        const updateData: Record<string, unknown> = {};
+        if ('name' in updates) updateData.name = updates.name;
+        if ('icon' in updates) updateData.icon = updates.icon ?? null;
+        if ('hidden' in updates) updateData.hidden = updates.hidden;
         const { error } = await supabase
             .from('custom_categories')
-            .update({ name: updates.name, icon: updates.icon ?? null, hidden: updates.hidden ?? null })
+            .update(updateData)
             .eq('id', id);
         if (error) { console.error('Update custom category error:', error); return; }
         setCustomCategories(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
