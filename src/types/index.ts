@@ -10,6 +10,7 @@ export interface CustomCategory {
   name: string;
   type: TransactionType;
   icon?: string;
+  hidden?: boolean;
 }
 
 // 수입/지출 카테고리

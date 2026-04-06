@@ -352,11 +352,12 @@ export function useSupabaseFinanceData() {
             }
             return;
         }
-        const cats: CustomCategory[] = (data || []).map((row: { id: string; name: string; type: string; icon?: string }) => ({
+        const cats: CustomCategory[] = (data || []).map((row: { id: string; name: string; type: string; icon?: string; hidden?: boolean }) => ({
             id: row.id,
             name: row.name,
             type: row.type as TransactionType,
             icon: row.icon || undefined,
+            hidden: row.hidden ?? false,
         }));
         setCustomCategories(cats);
     };
@@ -792,7 +793,7 @@ export function useSupabaseFinanceData() {
             return tempCat;
         }
         if (data) {
-            const newCat: CustomCategory = { id: data.id, name: data.name, type: data.type as TransactionType, icon: data.icon || undefined };
+            const newCat: CustomCategory = { id: data.id, name: data.name, type: data.type as TransactionType, icon: data.icon || undefined, hidden: data.hidden ?? false };
             setCustomCategories(prev => [...prev, newCat]);
             return newCat;
         }
@@ -801,7 +802,7 @@ export function useSupabaseFinanceData() {
     const updateCustomCategory = useCallback(async (id: string, updates: Partial<Omit<CustomCategory, 'id'>>) => {
         const { error } = await supabase
             .from('custom_categories')
-            .update({ name: updates.name, icon: updates.icon ?? null })
+            .update({ name: updates.name, icon: updates.icon ?? null, hidden: updates.hidden ?? null })
             .eq('id', id);
         if (error) { console.error('Update custom category error:', error); return; }
         setCustomCategories(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));

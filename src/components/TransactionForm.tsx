@@ -48,14 +48,11 @@ export function TransactionForm({
   const [newCatName, setNewCatName] = useState('');
   const [isAddingCat, setIsAddingCat] = useState(false);
 
-  // 커스텀 카테고리 편집
-  const [editingCatId, setEditingCatId] = useState<string | null>(null);
+  // 카테고리 편집 (기본 + 커스텀 통합)
+  const [editingCatKey, setEditingCatKey] = useState<string | null>(null); // builtin: cat.id, custom: cat.id
   const [editCatEmoji, setEditCatEmoji] = useState('');
   const [editCatName, setEditCatName] = useState('');
-
-  // 기본 카테고리 이모지 편집
-  const [editingBuiltinId, setEditingBuiltinId] = useState<string | null>(null);
-  const [editBuiltinEmoji, setEditBuiltinEmoji] = useState('');
+  const [editCatNameEditable, setEditCatNameEditable] = useState(false); // 기본 카테고리는 이름 수정 불가
 
   useEffect(() => {
     if (editTransaction) {
@@ -76,29 +73,28 @@ export function TransactionForm({
     setShowCustomInput(false);
     setNewCatEmoji('📌');
     setNewCatName('');
-    setEditingCatId(null);
-    setEditingBuiltinId(null);
+    setEditingCatKey(null);
   }, [editTransaction, year, month, isOpen]);
 
   const handleTypeChange = (newType: TransactionType) => {
     setType(newType);
     setCategory('');
-    setEditingCatId(null);
-    setEditingBuiltinId(null);
+    setEditingCatKey(null);
     setShowCustomInput(false);
   };
 
   const baseCategories = type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
   const customOfType = customCategories.filter((c) => c.type === type);
 
-  // 기본 카테고리 ID 목록 (이름이 겹치는 custom은 override로 취급)
   const builtinIdSet = new Set(baseCategories.map((b) => b.id));
-  // 기본 카테고리 이모지 오버라이드 맵 (custom_categories에 동일 name이 있으면 override)
+  // 기본 카테고리 오버라이드 맵 (이모지 변경 또는 숨김 처리)
   const builtinOverrideMap = new Map(
     customOfType.filter((c) => builtinIdSet.has(c.name)).map((c) => [c.name, c])
   );
-  // override가 아닌 진짜 커스텀 카테고리
-  const trueCustomCategories = customOfType.filter((c) => !builtinIdSet.has(c.name));
+  // 숨겨지지 않은 기본 카테고리
+  const visibleBuiltins = baseCategories.filter((b) => !builtinOverrideMap.get(b.id)?.hidden);
+  // 진짜 커스텀 카테고리 (숨겨지지 않은 것만)
+  const trueCustomCategories = customOfType.filter((c) => !builtinIdSet.has(c.name) && !c.hidden);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,52 +132,67 @@ export function TransactionForm({
     setNewCatName('');
   };
 
-  // ── 커스텀 카테고리 편집 ──
-  const handleStartEditCustom = (cat: CustomCategory, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setEditingCatId(cat.id);
-    setEditCatEmoji(cat.icon || '📌');
-    setEditCatName(cat.name);
-    setEditingBuiltinId(null);
-    setShowCustomInput(false);
-  };
-
-  const handleSaveEditCustom = async (cat: CustomCategory, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!editCatName.trim() || !onUpdateCustomCategory) return;
-    const oldName = cat.name;
-    const newName = editCatName.trim();
-    await onUpdateCustomCategory(cat.id, { name: newName, icon: editCatEmoji });
-    if (category === oldName) setCategory(newName);
-    setEditingCatId(null);
-  };
-
-  const handleDeleteCustom = async (cat: CustomCategory, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!onDeleteCustomCategory) return;
-    if (!confirm(`'${cat.name}' 카테고리를 삭제하시겠습니까?`)) return;
-    await onDeleteCustomCategory(cat.id);
-    if (category === cat.name) setCategory('');
-  };
-
-  // ── 기본 카테고리 이모지 편집 ──
+  // ── 편집 시작 (기본 카테고리) ──
   const handleStartEditBuiltin = (builtinId: string, currentIcon: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setEditingBuiltinId(builtinId);
-    setEditBuiltinEmoji(currentIcon);
-    setEditingCatId(null);
+    setEditingCatKey(`builtin:${builtinId}`);
+    setEditCatEmoji(currentIcon);
+    setEditCatName(''); // 기본 카테고리 이름은 수정 불가
+    setEditCatNameEditable(false);
     setShowCustomInput(false);
   };
 
-  const handleSaveEditBuiltin = async (builtinId: string, e: React.MouseEvent) => {
+  // ── 편집 시작 (커스텀 카테고리) ──
+  const handleStartEditCustom = (cat: CustomCategory, e: React.MouseEvent) => {
     e.stopPropagation();
-    const existing = builtinOverrideMap.get(builtinId);
-    if (existing) {
-      await onUpdateCustomCategory?.(existing.id, { name: builtinId, icon: editBuiltinEmoji });
+    setEditingCatKey(`custom:${cat.id}`);
+    setEditCatEmoji(cat.icon || '📌');
+    setEditCatName(cat.name);
+    setEditCatNameEditable(true);
+    setShowCustomInput(false);
+  };
+
+  // ── 저장 ──
+  const handleSaveEdit = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!editingCatKey) return;
+
+    if (editingCatKey.startsWith('builtin:')) {
+      const builtinId = editingCatKey.slice(8);
+      const existing = builtinOverrideMap.get(builtinId);
+      if (existing) {
+        await onUpdateCustomCategory?.(existing.id, { icon: editCatEmoji, hidden: false });
+      } else {
+        await onAddCustomCategory?.({ name: builtinId, type, icon: editCatEmoji });
+      }
     } else {
-      await onAddCustomCategory?.({ name: builtinId, type, icon: editBuiltinEmoji });
+      const catId = editingCatKey.slice(7);
+      const cat = trueCustomCategories.find((c) => c.id === catId);
+      if (!cat || !editCatName.trim()) return;
+      const oldName = cat.name;
+      await onUpdateCustomCategory?.(catId, { name: editCatName.trim(), icon: editCatEmoji });
+      if (category === oldName) setCategory(editCatName.trim());
     }
-    setEditingBuiltinId(null);
+    setEditingCatKey(null);
+  };
+
+  // ── 삭제/숨김 ──
+  const handleDelete = async (target: { type: 'builtin'; id: string; label: string } | { type: 'custom'; cat: CustomCategory }, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (target.type === 'builtin') {
+      if (!confirm(`'${target.label}' 카테고리를 숨기겠습니까?\n(언제든 다시 복원할 수 있습니다)`)) return;
+      const existing = builtinOverrideMap.get(target.id);
+      if (existing) {
+        await onUpdateCustomCategory?.(existing.id, { hidden: true });
+      } else {
+        await onAddCustomCategory?.({ name: target.id, type, icon: baseCategories.find(b => b.id === target.id)?.icon || '📌', hidden: true });
+      }
+      if (category === target.id) setCategory('');
+    } else {
+      if (!confirm(`'${target.cat.name}' 카테고리를 삭제하시겠습니까?`)) return;
+      await onDeleteCustomCategory?.(target.cat.id);
+      if (category === target.cat.name) setCategory('');
+    }
   };
 
   const accentBg =
@@ -242,31 +253,36 @@ export function TransactionForm({
           <label className="block text-sm font-medium text-gray-700 mb-2">카테고리</label>
           <div className="flex flex-wrap gap-2">
 
+            {/* ── 편집 인라인 폼 (공통) ── */}
+            {editingCatKey && (
+              <div className="w-full flex items-center gap-1.5 px-2 py-1 bg-blue-50 rounded-xl border-2 border-blue-300">
+                <input type="text" value={editCatEmoji} onChange={(e) => setEditCatEmoji(e.target.value)}
+                  onClick={(e) => e.stopPropagation()} maxLength={2} autoFocus
+                  className="w-9 text-center bg-white rounded-lg py-1 text-sm border border-gray-200 focus:outline-none" />
+                {editCatNameEditable ? (
+                  <input type="text" value={editCatName} onChange={(e) => setEditCatName(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSaveEdit(e as unknown as React.MouseEvent); } if (e.key === 'Escape') setEditingCatKey(null); }}
+                    className="flex-1 px-2 py-1 bg-white rounded-lg text-sm border border-gray-200 focus:outline-none" />
+                ) : (
+                  <span className="flex-1 text-sm text-gray-500 px-1">이모지만 수정 가능</span>
+                )}
+                <button type="button" onClick={handleSaveEdit} disabled={editCatNameEditable && !editCatName.trim()}
+                  className="w-7 h-7 flex items-center justify-center bg-blue-500 text-white rounded-lg disabled:opacity-50">
+                  <Check className="w-3.5 h-3.5" />
+                </button>
+                <button type="button" onClick={(e) => { e.stopPropagation(); setEditingCatKey(null); }}
+                  className="w-7 h-7 flex items-center justify-center bg-gray-300 text-white rounded-lg">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             {/* ── 기본 카테고리 ── */}
-            {baseCategories.map((cat) => {
+            {visibleBuiltins.map((cat) => {
               const override = builtinOverrideMap.get(cat.id);
               const displayIcon = override?.icon || cat.icon;
               const isSelected = category === cat.id;
-
-              if (editingBuiltinId === cat.id) {
-                return (
-                  <div key={cat.id} className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-xl border-2 border-blue-300">
-                    <input type="text" value={editBuiltinEmoji} onChange={(e) => setEditBuiltinEmoji(e.target.value)}
-                      onClick={(e) => e.stopPropagation()} maxLength={2} autoFocus
-                      className="w-9 text-center bg-white rounded-lg py-1 text-sm border border-gray-200 focus:outline-none" />
-                    <span className="text-sm text-gray-600">{cat.label}</span>
-                    <button type="button" onClick={(e) => handleSaveEditBuiltin(cat.id, e)}
-                      className="w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-lg">
-                      <Check className="w-3.5 h-3.5" />
-                    </button>
-                    <button type="button" onClick={(e) => { e.stopPropagation(); setEditingBuiltinId(null); }}
-                      className="w-6 h-6 flex items-center justify-center bg-gray-300 text-white rounded-lg">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                );
-              }
-
               return (
                 <div key={cat.id} className="group relative">
                   <button type="button" onClick={() => setCategory(cat.id)}
@@ -274,12 +290,16 @@ export function TransactionForm({
                     <span>{displayIcon}</span>
                     <span>{cat.label}</span>
                   </button>
-                  {/* 이모지 편집 배지 — 크기 변화 없이 opacity만 토글 */}
-                  <button type="button" onClick={(e) => handleStartEditBuiltin(cat.id, displayIcon, e)}
-                    className="absolute -top-1.5 -right-1.5 w-4 h-4 flex items-center justify-center bg-white rounded-full shadow-sm border border-gray-200 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity duration-150 z-10"
-                    title="이모지 수정">
-                    <Pencil className="w-2.5 h-2.5 text-gray-500" />
-                  </button>
+                  <div className="absolute -top-1.5 -right-1.5 hidden group-hover:flex gap-0.5 z-10">
+                    <button type="button" onClick={(e) => handleStartEditBuiltin(cat.id, displayIcon, e)}
+                      className="w-5 h-5 flex items-center justify-center bg-white rounded-full shadow border border-gray-200 hover:border-blue-300" title="이모지 수정">
+                      <Pencil className="w-2.5 h-2.5 text-gray-500" />
+                    </button>
+                    <button type="button" onClick={(e) => handleDelete({ type: 'builtin', id: cat.id, label: cat.label }, e)}
+                      className="w-5 h-5 flex items-center justify-center bg-white rounded-full shadow border border-red-200 hover:border-red-400" title="숨기기">
+                      <Trash2 className="w-2.5 h-2.5 text-red-400" />
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -287,44 +307,23 @@ export function TransactionForm({
             {/* ── 커스텀 카테고리 ── */}
             {trueCustomCategories.map((cat) => {
               const isSelected = category === cat.name;
-
-              if (editingCatId === cat.id) {
-                return (
-                  <div key={cat.id} className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-xl border-2 border-blue-300">
-                    <input type="text" value={editCatEmoji} onChange={(e) => setEditCatEmoji(e.target.value)}
-                      onClick={(e) => e.stopPropagation()} maxLength={2} autoFocus
-                      className="w-9 text-center bg-white rounded-lg py-1 text-sm border border-gray-200 focus:outline-none" />
-                    <input type="text" value={editCatName} onChange={(e) => setEditCatName(e.target.value)}
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSaveEditCustom(cat, e as unknown as React.MouseEvent); } if (e.key === 'Escape') setEditingCatId(null); }}
-                      className="w-20 px-2 py-1 bg-white rounded-lg text-sm border border-gray-200 focus:outline-none" />
-                    <button type="button" onClick={(e) => handleSaveEditCustom(cat, e)} disabled={!editCatName.trim()}
-                      className="w-6 h-6 flex items-center justify-center bg-blue-500 text-white rounded-lg disabled:opacity-50">
-                      <Check className="w-3.5 h-3.5" />
-                    </button>
-                    <button type="button" onClick={(e) => { e.stopPropagation(); setEditingCatId(null); }}
-                      className="w-6 h-6 flex items-center justify-center bg-gray-300 text-white rounded-lg">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                );
-              }
-
               return (
-                <div key={cat.id} className="flex items-center gap-0.5">
+                <div key={cat.id} className="group relative">
                   <button type="button" onClick={() => setCategory(cat.name)}
                     className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${isSelected ? accentBg + ' ' + accentText : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                     <span>{cat.icon || '📌'}</span>
                     <span>{cat.name}</span>
                   </button>
-                  <button type="button" onClick={(e) => handleStartEditCustom(cat, e)}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors" title="수정">
-                    <Pencil className="w-3 h-3 text-gray-400" />
-                  </button>
-                  <button type="button" onClick={(e) => handleDeleteCustom(cat, e)}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-100 hover:bg-red-50 rounded-lg transition-colors" title="삭제">
-                    <Trash2 className="w-3 h-3 text-red-400" />
-                  </button>
+                  <div className="absolute -top-1.5 -right-1.5 hidden group-hover:flex gap-0.5 z-10">
+                    <button type="button" onClick={(e) => handleStartEditCustom(cat, e)}
+                      className="w-5 h-5 flex items-center justify-center bg-white rounded-full shadow border border-gray-200 hover:border-blue-300" title="수정">
+                      <Pencil className="w-2.5 h-2.5 text-gray-500" />
+                    </button>
+                    <button type="button" onClick={(e) => handleDelete({ type: 'custom', cat }, e)}
+                      className="w-5 h-5 flex items-center justify-center bg-white rounded-full shadow border border-red-200 hover:border-red-400" title="삭제">
+                      <Trash2 className="w-2.5 h-2.5 text-red-400" />
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -349,7 +348,7 @@ export function TransactionForm({
                   </button>
                 </div>
               ) : (
-                <button type="button" onClick={() => { setShowCustomInput(true); setEditingCatId(null); setEditingBuiltinId(null); }}
+                <button type="button" onClick={() => { setShowCustomInput(true); setEditingCatKey(null); }}
                   className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600 border-2 border-dashed border-gray-200 transition-all">
                   <Plus className="w-3.5 h-3.5" />
                   직접 추가
