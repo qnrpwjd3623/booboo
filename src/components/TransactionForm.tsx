@@ -311,23 +311,20 @@ export function TransactionForm({
               }
 
               return (
-                <div key={cat.id} className="group relative">
+                <div key={cat.id} className="flex items-center gap-0.5">
                   <button type="button" onClick={() => setCategory(cat.name)}
                     className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${isSelected ? accentBg + ' ' + accentText : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                     <span>{cat.icon || '📌'}</span>
                     <span>{cat.name}</span>
                   </button>
-                  {/* 편집/삭제 배지 — 크기 변화 없이 opacity만 토글 */}
-                  <div className="absolute -top-1.5 -right-1.5 flex gap-0.5 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity duration-150 z-10">
-                    <button type="button" onClick={(e) => handleStartEditCustom(cat, e)}
-                      className="w-4 h-4 flex items-center justify-center bg-white rounded-full shadow-sm border border-gray-200" title="수정">
-                      <Pencil className="w-2.5 h-2.5 text-gray-500" />
-                    </button>
-                    <button type="button" onClick={(e) => handleDeleteCustom(cat, e)}
-                      className="w-4 h-4 flex items-center justify-center bg-white rounded-full shadow-sm border border-red-200" title="삭제">
-                      <Trash2 className="w-2.5 h-2.5 text-red-400" />
-                    </button>
-                  </div>
+                  <button type="button" onClick={(e) => handleStartEditCustom(cat, e)}
+                    className="w-6 h-6 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors" title="수정">
+                    <Pencil className="w-3 h-3 text-gray-400" />
+                  </button>
+                  <button type="button" onClick={(e) => handleDeleteCustom(cat, e)}
+                    className="w-6 h-6 flex items-center justify-center bg-gray-100 hover:bg-red-50 rounded-lg transition-colors" title="삭제">
+                    <Trash2 className="w-3 h-3 text-red-400" />
+                  </button>
                 </div>
               );
             })}

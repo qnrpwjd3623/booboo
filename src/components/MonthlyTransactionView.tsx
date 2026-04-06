@@ -4,6 +4,11 @@ import { ArrowLeft, Plus, Pencil, Trash2, TrendingUp, TrendingDown, ChevronLeft,
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import type { Transaction, CustomCategory } from '@/types';
 import { getCategoryIcon } from '@/constants/categories';
+
+function resolveIcon(categoryName: string, customCategories: CustomCategory[]): string {
+  const custom = customCategories.find((c) => c.name === categoryName);
+  return custom?.icon || getCategoryIcon(categoryName);
+}
 import { PersonSpendingCard } from './PersonSpendingCard';
 import { ImageImportModal } from './ImageImportModal';
 
@@ -313,7 +318,7 @@ export function MonthlyTransactionView({
                       {activeChartIndex !== null && sortedExpenseCategories[activeChartIndex] ? (
                         <>
                           <span className="text-xs text-gray-500 font-medium">
-                            {getCategoryIcon(sortedExpenseCategories[activeChartIndex][0])} {sortedExpenseCategories[activeChartIndex][0]}
+                            {resolveIcon(sortedExpenseCategories[activeChartIndex][0], customCategories)} {sortedExpenseCategories[activeChartIndex][0]}
                           </span>
                           <span className="text-sm font-bold text-red-500">
                             {sortedExpenseCategories[activeChartIndex][1] >= 10000
@@ -344,7 +349,7 @@ export function MonthlyTransactionView({
                         className="w-2 h-2 rounded-full flex-shrink-0"
                         style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }}
                       />
-                      <span className="text-sm">{getCategoryIcon(cat)}</span>
+                      <span className="text-sm">{resolveIcon(cat, customCategories)}</span>
                       <span className="text-xs text-gray-600 font-medium">{cat}</span>
                       <span className="text-xs font-bold text-red-500">
                         {amount >= 10000
@@ -427,6 +432,7 @@ export function MonthlyTransactionView({
                     key={`${txn.id}-${sortBy}-${sortDir}-${filterOwner}`}
                     transaction={txn}
                     index={i}
+                    customCategories={customCategories}
                     onEdit={() => onEditTransaction(txn)}
                     onDelete={() => {
                       if (confirm('이 거래를 삭제하시겠습니까?')) {
@@ -450,14 +456,16 @@ function TransactionItem({
   index,
   onEdit,
   onDelete,
+  customCategories,
 }: {
   transaction: Transaction;
   index: number;
   onEdit: () => void;
   onDelete: () => void;
+  customCategories: CustomCategory[];
 }) {
   const [hovered, setHovered] = useState(false);
-  const icon = getCategoryIcon(transaction.category);
+  const icon = resolveIcon(transaction.category, customCategories);
   const isIncome = transaction.type === 'income';
   const isShared = transaction.owner === 'shared';
 
