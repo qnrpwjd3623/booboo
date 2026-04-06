@@ -17,6 +17,7 @@ interface TransactionFormProps {
   onAddCustomCategory?: (cat: Omit<CustomCategory, 'id'>) => Promise<CustomCategory | undefined>;
   onUpdateCustomCategory?: (id: string, updates: Partial<Omit<CustomCategory, 'id'>>) => Promise<void>;
   onDeleteCustomCategory?: (id: string) => Promise<void>;
+  onRenameCategory?: (oldName: string, newName: string) => Promise<void>;
 }
 
 export function TransactionForm({
@@ -32,6 +33,7 @@ export function TransactionForm({
   onAddCustomCategory,
   onUpdateCustomCategory,
   onDeleteCustomCategory,
+  onRenameCategory,
 }: TransactionFormProps) {
   const isEditMode = !!editTransaction;
 
@@ -49,10 +51,9 @@ export function TransactionForm({
   const [isAddingCat, setIsAddingCat] = useState(false);
 
   // 카테고리 편집 (기본 + 커스텀 통합)
-  const [editingCatKey, setEditingCatKey] = useState<string | null>(null); // builtin: cat.id, custom: cat.id
+  const [editingCatKey, setEditingCatKey] = useState<string | null>(null);
   const [editCatEmoji, setEditCatEmoji] = useState('');
   const [editCatName, setEditCatName] = useState('');
-  const [editCatNameEditable, setEditCatNameEditable] = useState(false); // 기본 카테고리는 이름 수정 불가
 
   useEffect(() => {
     if (editTransaction) {
@@ -133,12 +134,11 @@ export function TransactionForm({
   };
 
   // ── 편집 시작 (기본 카테고리) ──
-  const handleStartEditBuiltin = (builtinId: string, currentIcon: string, e: React.MouseEvent) => {
+  const handleStartEditBuiltin = (builtinId: string, currentIcon: string, currentLabel: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingCatKey(`builtin:${builtinId}`);
     setEditCatEmoji(currentIcon);
-    setEditCatName(''); // 기본 카테고리 이름은 수정 불가
-    setEditCatNameEditable(false);
+    setEditCatName(currentLabel);
     setShowCustomInput(false);
   };
 
@@ -148,30 +148,48 @@ export function TransactionForm({
     setEditingCatKey(`custom:${cat.id}`);
     setEditCatEmoji(cat.icon || '📌');
     setEditCatName(cat.name);
-    setEditCatNameEditable(true);
     setShowCustomInput(false);
   };
 
   // ── 저장 ──
   const handleSaveEdit = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!editingCatKey) return;
+    if (!editingCatKey || !editCatName.trim()) return;
+    const newName = editCatName.trim();
 
     if (editingCatKey.startsWith('builtin:')) {
       const builtinId = editingCatKey.slice(8);
-      const existing = builtinOverrideMap.get(builtinId);
-      if (existing) {
-        await onUpdateCustomCategory?.(existing.id, { icon: editCatEmoji, hidden: false });
+      const originalLabel = baseCategories.find(b => b.id === builtinId)?.label ?? builtinId;
+      const nameChanged = newName !== originalLabel;
+
+      if (nameChanged) {
+        // 이름이 바뀌면: 기존 거래 모두 새 이름으로 업데이트 + 새 커스텀 카테고리 생성 + 기존 빌트인 숨김
+        await onRenameCategory?.(builtinId, newName);
+        await onAddCustomCategory?.({ name: newName, type, icon: editCatEmoji });
+        const existing = builtinOverrideMap.get(builtinId);
+        if (existing) {
+          await onUpdateCustomCategory?.(existing.id, { hidden: true });
+        } else {
+          await onAddCustomCategory?.({ name: builtinId, type, icon: editCatEmoji, hidden: true });
+        }
+        if (category === builtinId) setCategory(newName);
       } else {
-        await onAddCustomCategory?.({ name: builtinId, type, icon: editCatEmoji });
+        // 이름 동일 → 이모지만 업데이트
+        const existing = builtinOverrideMap.get(builtinId);
+        if (existing) {
+          await onUpdateCustomCategory?.(existing.id, { icon: editCatEmoji, hidden: false });
+        } else {
+          await onAddCustomCategory?.({ name: builtinId, type, icon: editCatEmoji });
+        }
       }
     } else {
       const catId = editingCatKey.slice(7);
       const cat = trueCustomCategories.find((c) => c.id === catId);
-      if (!cat || !editCatName.trim()) return;
+      if (!cat) return;
       const oldName = cat.name;
-      await onUpdateCustomCategory?.(catId, { name: editCatName.trim(), icon: editCatEmoji });
-      if (category === oldName) setCategory(editCatName.trim());
+      if (newName !== oldName) await onRenameCategory?.(oldName, newName);
+      await onUpdateCustomCategory?.(catId, { name: newName, icon: editCatEmoji });
+      if (category === oldName) setCategory(newName);
     }
     setEditingCatKey(null);
   };
@@ -259,15 +277,11 @@ export function TransactionForm({
                 <input type="text" value={editCatEmoji} onChange={(e) => setEditCatEmoji(e.target.value)}
                   onClick={(e) => e.stopPropagation()} maxLength={2} autoFocus
                   className="w-9 text-center bg-white rounded-lg py-1 text-sm border border-gray-200 focus:outline-none" />
-                {editCatNameEditable ? (
-                  <input type="text" value={editCatName} onChange={(e) => setEditCatName(e.target.value)}
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSaveEdit(e as unknown as React.MouseEvent); } if (e.key === 'Escape') setEditingCatKey(null); }}
-                    className="flex-1 px-2 py-1 bg-white rounded-lg text-sm border border-gray-200 focus:outline-none" />
-                ) : (
-                  <span className="flex-1 text-sm text-gray-500 px-1">이모지만 수정 가능</span>
-                )}
-                <button type="button" onClick={handleSaveEdit} disabled={editCatNameEditable && !editCatName.trim()}
+                <input type="text" value={editCatName} onChange={(e) => setEditCatName(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSaveEdit(e as unknown as React.MouseEvent); } if (e.key === 'Escape') setEditingCatKey(null); }}
+                  className="flex-1 px-2 py-1 bg-white rounded-lg text-sm border border-gray-200 focus:outline-none" />
+                <button type="button" onClick={handleSaveEdit} disabled={!editCatName.trim()}
                   className="w-7 h-7 flex items-center justify-center bg-blue-500 text-white rounded-lg disabled:opacity-50">
                   <Check className="w-3.5 h-3.5" />
                 </button>
@@ -291,7 +305,7 @@ export function TransactionForm({
                     <span>{cat.label}</span>
                   </button>
                   <div className="absolute -top-1.5 -right-1.5 hidden group-hover:flex gap-0.5 z-10">
-                    <button type="button" onClick={(e) => handleStartEditBuiltin(cat.id, displayIcon, e)}
+                    <button type="button" onClick={(e) => handleStartEditBuiltin(cat.id, displayIcon, cat.label, e)}
                       className="w-5 h-5 flex items-center justify-center bg-white rounded-full shadow border border-gray-200 hover:border-blue-300" title="이모지 수정">
                       <Pencil className="w-2.5 h-2.5 text-gray-500" />
                     </button>

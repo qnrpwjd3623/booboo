@@ -538,6 +538,11 @@ function App() {
     updateYearlySettings(selectedYear, { targetNetWorth: target });
   }, [selectedYear, updateYearlySettings]);
 
+  const handleRenameCategory = useCallback(async (oldName: string, newName: string) => {
+    const toUpdate = transactions.filter(t => t.category === oldName);
+    await Promise.all(toUpdate.map(t => updateTransaction(t.id, { category: newName })));
+  }, [transactions, updateTransaction]);
+
   const handleClearYearTransactions = useCallback(async () => {
     if (!confirm(`⚠️ ${selectedYear}년 거래내역을 모두 삭제하시겠습니까?\n(시작 순자산도 0으로 초기화됩니다)\n이 작업은 되돌릴 수 없습니다.`)) return;
     try {
@@ -969,6 +974,7 @@ function App() {
         onAddCustomCategory={addCustomCategory}
         onUpdateCustomCategory={updateCustomCategory}
         onDeleteCustomCategory={deleteCustomCategory}
+        onRenameCategory={handleRenameCategory}
       />
 
       <StockForm
