@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { TrendingUp, Hash, DollarSign, Building2, FileText, Search, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { Modal } from './Modal';
@@ -74,25 +74,9 @@ export function StockForm({ onAdd, onUpdate, onClose, isOpen, editStock, partner
       setFetchState('idle');
       setFetchedInfo(null);
     }
-  }, [market]);
+  }, [editStock, market]);
 
-  // 티커 입력 시 자동 조회 (debounce 800ms)
-  useEffect(() => {
-    if (!ticker || ticker.length < 1) {
-      setFetchState('idle');
-      setFetchedInfo(null);
-      return;
-    }
-    if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
-    fetchTimerRef.current = setTimeout(() => {
-      handleFetchPrice();
-    }, 800);
-    return () => {
-      if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
-    };
-  }, [ticker]);
-
-  const handleFetchPrice = async () => {
+  const handleFetchPrice = useCallback(async () => {
     if (!ticker) return;
     setFetchState('loading');
     setFetchedInfo(null);
@@ -132,7 +116,23 @@ export function StockForm({ onAdd, onUpdate, onClose, isOpen, editStock, partner
     } catch {
       setFetchState('error');
     }
-  };
+  }, [market, name, ticker]);
+
+  // 티커 입력 시 자동 조회 (debounce 800ms)
+  useEffect(() => {
+    if (!ticker || ticker.length < 1) {
+      setFetchState('idle');
+      setFetchedInfo(null);
+      return;
+    }
+    if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
+    fetchTimerRef.current = setTimeout(() => {
+      handleFetchPrice();
+    }, 800);
+    return () => {
+      if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
+    };
+  }, [ticker, handleFetchPrice]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -232,7 +232,7 @@ export function StockForm({ onAdd, onUpdate, onClose, isOpen, editStock, partner
               onChange={(e) => setTicker(
                 market === 'domestic'
                   ? e.target.value.replace(/[^0-9]/g, '').slice(0, 6)
-                  : e.target.value.toUpperCase().replace(/[^A-Z0-9.\-]/g, '')
+                  : e.target.value.toUpperCase().replace(/[^A-Z0-9.-]/g, '')
               )}
               placeholder={tickerPlaceholder}
               className="w-full pl-12 pr-12 py-3 bg-gray-50 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"

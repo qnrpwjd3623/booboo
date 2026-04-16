@@ -174,7 +174,9 @@ function App() {
           try {
             if (row.type === 'bot') setBotMessage(JSON.parse(row.comment) as BotMessage);
             if (row.type === 'challenge') setMonthlyChallenge(JSON.parse(row.comment) as Challenge);
-          } catch {}
+          } catch {
+            return;
+          }
         }
       }
       setDbLoadDone(true);
@@ -243,11 +245,11 @@ function App() {
   } = useSupabaseFinanceData(user);
 
   // couple profile — DB에서 로드, 변경 시 DB에 저장 (기기간 동기화)
-  const profile: CoupleProfile = {
+  const profile: CoupleProfile = useMemo(() => ({
     partner1: { name: coupleProfile.partner1Name, avatar: coupleProfile.partner1Avatar, emoji: coupleProfile.partner1Emoji },
     partner2: { name: coupleProfile.partner2Name, avatar: coupleProfile.partner2Avatar, emoji: coupleProfile.partner2Emoji },
     coupleName: coupleProfile.coupleName,
-  };
+  }), [coupleProfile]);
   const setProfile = (next: CoupleProfile | ((prev: CoupleProfile) => CoupleProfile)) => {
     const resolved = typeof next === 'function' ? next(profile) : next;
     updateCoupleProfile({
@@ -264,7 +266,7 @@ function App() {
   const settings = getYearlySettings(selectedYear);
 
   const rawMonthlyTargets = getMonthlyTargets(selectedYear);
-  const monthlyTargets = useMemo(() => rawMonthlyTargets, [JSON.stringify(rawMonthlyTargets)]);
+  const monthlyTargets = rawMonthlyTargets;
 
   const yearlyData = useMemo(() => {
     // 이전 연도 이월: startNetWorth가 0(미설정)이면 이전 연도 말 현금 잔액을 자동 적용
@@ -345,7 +347,7 @@ function App() {
         updateStock(stock.id, { currentPrice: newPrice });
       }
     });
-  }, [stockPrices]);
+  }, [stockPrices, stocks, updateStock]);
 
   // AI 컨텍스트 생성 헬퍼 (버튼 클릭 시 사용)
   const buildFinancialContext = useCallback((): FinancialContext => {
@@ -388,7 +390,7 @@ function App() {
         expenseByCategory: Object.entries(expenseByCategory).map(([category, amount]) => ({ category, amount })),
       } : undefined,
     };
-  }, [stocks, yearlyData, currentMonth, transactions, selectedYear, monthsLeft, profile]);
+  }, [stocks, yearlyData, currentMonth, transactions, selectedYear, monthsLeft, profile, realCurrentYearData.currentNetWorth]);
 
   // 부부동산봇 조언 새로고침 (버튼 클릭 시에만 호출)
   const handleRefreshAdvice = useCallback(async () => {

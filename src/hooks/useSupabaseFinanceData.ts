@@ -259,6 +259,8 @@ export function useSupabaseFinanceData(user: User | null) {
             return;
         }
         loadAllData();
+    // loadAllData closes over the current user-scoped loaders below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userId]);
 
     const loadCoupleProfile = async () => {
