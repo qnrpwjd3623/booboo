@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/services/supabaseClient';
+import type { User } from '@supabase/supabase-js';
 import type { Transaction, StockItem, FinancialProduct, LoanItem, CustomCategory, TransactionType } from '@/types';
 
 export interface CoupleProfileDb {
@@ -231,7 +232,8 @@ function toAppLoan(db: DbLoan): LoanItem {
 }
 
 // ========== Hook ==========
-export function useSupabaseFinanceData() {
+export function useSupabaseFinanceData(user: User | null) {
+    const userId = user?.id ?? null;
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [stocks, setStocks] = useState<StockItem[]>([]);
     const [financialProducts, setFinancialProducts] = useState<FinancialProduct[]>([]);
@@ -244,17 +246,36 @@ export function useSupabaseFinanceData() {
 
     // ========== 초기 데이터 로드 ==========
     useEffect(() => {
+        if (!userId) {
+            setTransactions([]);
+            setStocks([]);
+            setFinancialProducts([]);
+            setLoans([]);
+            setCustomCategories([]);
+            setYearlySettings({});
+            setCoupleProfile(DEFAULT_PROFILE);
+            setFpOrder([]);
+            setIsLoading(false);
+            return;
+        }
         loadAllData();
-    }, []);
+    // loadAllData closes over the current user-scoped loaders below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userId]);
 
     const loadCoupleProfile = async () => {
-        const { data: rows } = await supabase.from('couple_profiles').select('*').order('created_at', { ascending: true });
+        if (!userId) return;
+        const { data: rows } = await supabase
+            .from('couple_profiles')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: true });
         if (!rows || rows.length === 0) return;
         const data = rows[0];
         // 중복 행 정리: 첫 번째 행만 남기고 나머지 삭제
         if (rows.length > 1) {
             const extraIds = rows.slice(1).map((r: { id: string }) => r.id);
-            await supabase.from('couple_profiles').delete().in('id', extraIds);
+            await supabase.from('couple_profiles').delete().eq('user_id', userId).in('id', extraIds);
         }
         setCoupleProfile({
             partner1Name: data.partner1_name || '파트너1',
@@ -269,13 +290,14 @@ export function useSupabaseFinanceData() {
     };
 
     const updateCoupleProfile = useCallback(async (newProfile: CoupleProfileDb) => {
+        if (!userId) return;
         // 이름이 바뀌면 모든 테이블의 owner 값을 새 이름으로 일괄 업데이트
         const ownerTables = ['transactions', 'stocks', 'financial_products', 'loans'] as const;
 
         const renameOwner = async (oldName: string, newName: string) => {
             if (!oldName || oldName === newName) return;
             for (const table of ownerTables) {
-                await supabase.from(table).update({ owner: newName }).eq('owner', oldName);
+                await supabase.from(table).update({ owner: newName }).eq('user_id', userId).eq('owner', oldName);
             }
             // 로컬 상태도 즉시 반영
             setTransactions(prev => prev.map(t => t.owner === oldName ? { ...t, owner: newName } : t));
@@ -288,14 +310,19 @@ export function useSupabaseFinanceData() {
         await renameOwner(coupleProfile.partner2Name, newProfile.partner2Name);
 
         // SELECT without .single() to avoid errors on 0 or 2+ rows
-        const { data: allRows } = await supabase.from('couple_profiles').select('id').order('created_at', { ascending: true });
+        const { data: allRows } = await supabase
+            .from('couple_profiles')
+            .select('id')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: true });
         const existingId = allRows?.[0]?.id ?? null;
         // 중복 행 정리
         if (allRows && allRows.length > 1) {
             const extraIds = allRows.slice(1).map((r: { id: string }) => r.id);
-            await supabase.from('couple_profiles').delete().in('id', extraIds);
+            await supabase.from('couple_profiles').delete().eq('user_id', userId).in('id', extraIds);
         }
         const row = {
+            user_id: userId,
             partner1_name: newProfile.partner1Name,
             partner1_avatar: newProfile.partner1Avatar,
             partner1_emoji: newProfile.partner1Emoji,
@@ -306,25 +333,31 @@ export function useSupabaseFinanceData() {
             updated_at: new Date().toISOString(),
         };
         if (existingId) {
-            const { error } = await supabase.from('couple_profiles').update(row).eq('id', existingId);
+            const { error } = await supabase.from('couple_profiles').update(row).eq('user_id', userId).eq('id', existingId);
             if (error) { console.error('Update couple profile error:', error); return; }
         } else {
             const { error } = await supabase.from('couple_profiles').insert(row);
             if (error) { console.error('Insert couple profile error:', error); return; }
         }
         setCoupleProfile(newProfile);
-    }, [coupleProfile]);
+    }, [coupleProfile, userId]);
 
     const updateFpOrder = useCallback(async (order: string[]) => {
+        if (!userId) return;
         setFpOrder(order);
-        const { data: allRows } = await supabase.from('couple_profiles').select('id').order('created_at', { ascending: true });
+        const { data: allRows } = await supabase
+            .from('couple_profiles')
+            .select('id')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: true });
         const existingId = allRows?.[0]?.id ?? null;
         if (existingId) {
-            await supabase.from('couple_profiles').update({ fp_order: order }).eq('id', existingId);
+            await supabase.from('couple_profiles').update({ fp_order: order }).eq('user_id', userId).eq('id', existingId);
         }
-    }, []);
+    }, [userId]);
 
     const loadAllData = async () => {
+        if (!userId) return;
         setIsLoading(true);
         try {
             await Promise.all([
@@ -344,7 +377,8 @@ export function useSupabaseFinanceData() {
     };
 
     const loadCustomCategories = async () => {
-        const { data, error } = await supabase.from('custom_categories').select('*').order('created_at', { ascending: true });
+        if (!userId) return;
+        const { data, error } = await supabase.from('custom_categories').select('*').eq('user_id', userId).order('created_at', { ascending: true });
         if (error) {
             // 테이블이 없을 수 있으므로 조용히 처리
             if (!error.message?.includes('does not exist') && error.code !== 'PGRST116') {
@@ -363,28 +397,33 @@ export function useSupabaseFinanceData() {
     };
 
     const loadTransactions = async () => {
+        if (!userId) return;
         const { data, error } = await supabase
             .from('transactions')
             .select('*')
+            .eq('user_id', userId)
             .order('created_at', { ascending: false });
         if (error) { console.error('Load transactions error:', error); return; }
         setTransactions((data || []).map(toAppTransaction));
     };
 
     const loadStocks = async () => {
-        const { data, error } = await supabase.from('stocks').select('*');
+        if (!userId) return;
+        const { data, error } = await supabase.from('stocks').select('*').eq('user_id', userId);
         if (error) { console.error('Load stocks error:', error); return; }
         setStocks((data || []).map(toAppStock));
     };
 
     const loadProducts = async () => {
-        const { data, error } = await supabase.from('financial_products').select('*');
+        if (!userId) return;
+        const { data, error } = await supabase.from('financial_products').select('*').eq('user_id', userId);
         if (error) { console.error('Load products error:', error); return; }
         setFinancialProducts((data || []).map(toAppProduct));
     };
 
     const loadYearlySettings = async () => {
-        const { data, error } = await supabase.from('yearly_settings').select('*');
+        if (!userId) return;
+        const { data, error } = await supabase.from('yearly_settings').select('*').eq('user_id', userId);
         if (error) { console.error('Load yearly settings error:', error); return; }
         const settings: Record<number, { targetNetWorth: number; startNetWorth: number; monthlyTargets?: Record<number, number>; chartTargetNetWorth?: number }> = {};
         (data || []).forEach((row: DbYearlySetting) => {
@@ -399,7 +438,8 @@ export function useSupabaseFinanceData() {
     };
 
     const loadLoans = async () => {
-        const { data, error } = await supabase.from('loans').select('*');
+        if (!userId) return;
+        const { data, error } = await supabase.from('loans').select('*').eq('user_id', userId);
         if (error) {
             if (error.code === 'PGRST116' || error.message?.includes('does not exist')) {
                 // 테이블 없음 - 조용히 처리
@@ -414,8 +454,9 @@ export function useSupabaseFinanceData() {
 
     // ========== Transactions ==========
     const addTransactions = useCallback(async (txns: Omit<Transaction, 'id'>[]): Promise<Transaction[]> => {
-        if (txns.length === 0) return [];
+        if (!userId || txns.length === 0) return [];
         const rows = txns.map(t => ({
+            user_id: userId,
             date: t.date,
             year: t.year,
             month: t.month,
@@ -433,12 +474,14 @@ export function useSupabaseFinanceData() {
         const newTxns = (data || []).map(toAppTransaction);
         setTransactions(prev => [...newTxns, ...prev]);
         return newTxns;
-    }, []);
+    }, [userId]);
 
     const addTransaction = useCallback(async (transaction: Omit<Transaction, 'id'>) => {
+        if (!userId) return;
         const { data, error } = await supabase
             .from('transactions')
             .insert({
+                user_id: userId,
                 date: transaction.date,
                 year: transaction.year,
                 month: transaction.month,
@@ -457,7 +500,7 @@ export function useSupabaseFinanceData() {
             setTransactions(prev => [newTxn, ...prev]);
             return newTxn;
         }
-    }, []);
+    }, [userId]);
 
     const updateTransaction = useCallback(async (id: string, updates: Partial<Transaction>) => {
         const dbUpdates: Record<string, unknown> = {};
@@ -470,28 +513,32 @@ export function useSupabaseFinanceData() {
         if (updates.amount !== undefined) dbUpdates.amount = updates.amount;
         if (updates.owner !== undefined) dbUpdates.owner = updates.owner;
 
-        const { error } = await supabase.from('transactions').update(dbUpdates).eq('id', id);
+        if (!userId) return;
+        const { error } = await supabase.from('transactions').update(dbUpdates).eq('user_id', userId).eq('id', id);
         if (error) { console.error('Update transaction error:', error); return; }
         setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
-    }, []);
+    }, [userId]);
 
     const deleteTransaction = useCallback(async (id: string) => {
-        const { error } = await supabase.from('transactions').delete().eq('id', id);
+        if (!userId) return;
+        const { error } = await supabase.from('transactions').delete().eq('user_id', userId).eq('id', id);
         if (error) { console.error('Delete transaction error:', error); return; }
         setTransactions(prev => prev.filter(t => t.id !== id));
-    }, []);
+    }, [userId]);
 
     const deleteTransactionsByYear = useCallback(async (year: number) => {
+        if (!userId) return;
         const { error } = await supabase
             .from('transactions')
             .delete()
+            .eq('user_id', userId)
             .eq('year', year);
         if (error) {
             console.error('Delete year transactions error:', error);
             throw new Error(error.message || '연도 데이터 삭제에 실패했습니다.');
         }
         setTransactions(prev => prev.filter(t => t.year !== year));
-    }, []);
+    }, [userId]);
 
     const getTransactionsByMonth = useCallback((year: number, month: number) => {
         return transactions.filter(t => t.year === year && t.month === month);
@@ -506,9 +553,11 @@ export function useSupabaseFinanceData() {
 
     // ========== Stocks ==========
     const addStock = useCallback(async (stock: Omit<StockItem, 'id'>) => {
+        if (!userId) return;
         const { data, error } = await supabase
             .from('stocks')
             .insert({
+                user_id: userId,
                 name: stock.name,
                 ticker: stock.ticker,
                 shares: stock.shares,
@@ -526,7 +575,7 @@ export function useSupabaseFinanceData() {
             setStocks(prev => [...prev, newStock]);
             return newStock;
         }
-    }, []);
+    }, [userId]);
 
     const updateStock = useCallback(async (id: string, updates: Partial<StockItem>) => {
         const dbUpdates: Record<string, unknown> = {};
@@ -538,16 +587,18 @@ export function useSupabaseFinanceData() {
         if (updates.memo !== undefined) dbUpdates.memo = updates.memo;
         if (updates.owner !== undefined) dbUpdates.owner = updates.owner;
 
-        const { error } = await supabase.from('stocks').update(dbUpdates).eq('id', id);
+        if (!userId) return;
+        const { error } = await supabase.from('stocks').update(dbUpdates).eq('user_id', userId).eq('id', id);
         if (error) { console.error('Update stock error:', error); return; }
         setStocks(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
-    }, []);
+    }, [userId]);
 
     const deleteStock = useCallback(async (id: string) => {
-        const { error } = await supabase.from('stocks').delete().eq('id', id);
+        if (!userId) return;
+        const { error } = await supabase.from('stocks').delete().eq('user_id', userId).eq('id', id);
         if (error) { console.error('Delete stock error:', error); return; }
         setStocks(prev => prev.filter(s => s.id !== id));
-    }, []);
+    }, [userId]);
 
     const getTotalStockValue = useMemo(() => {
         return stocks.reduce((sum, s) => sum + (s.shares * s.currentPrice), 0);
@@ -564,6 +615,7 @@ export function useSupabaseFinanceData() {
 
     // ========== Financial Products ==========
     const addFinancialProduct = useCallback(async (product: Omit<FinancialProduct, 'id'>) => {
+        if (!userId) throw new Error('로그인이 필요합니다.');
         // 확장 필드를 memo에 인코딩
         const ext: ProductExtFields = {
             interestRate: product.interestRate,
@@ -580,6 +632,7 @@ export function useSupabaseFinanceData() {
         const { data, error } = await supabase
             .from('financial_products')
             .insert({
+                user_id: userId,
                 type: product.type,
                 name: product.name,
                 company: product.company,
@@ -603,7 +656,7 @@ export function useSupabaseFinanceData() {
             setFinancialProducts(prev => [...prev, newProduct]);
             return newProduct;
         }
-    }, []);
+    }, [userId]);
 
     const updateFinancialProduct = useCallback(async (id: string, updates: Partial<FinancialProduct>) => {
         const dbUpdates: Record<string, unknown> = {};
@@ -642,16 +695,18 @@ export function useSupabaseFinanceData() {
             dbUpdates.memo = encodeProductMemo(updates.memo, ext);
         }
 
-        const { error } = await supabase.from('financial_products').update(dbUpdates).eq('id', id);
+        if (!userId) return;
+        const { error } = await supabase.from('financial_products').update(dbUpdates).eq('user_id', userId).eq('id', id);
         if (error) { console.error('Update product error:', error); return; }
         setFinancialProducts(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
-    }, []);
+    }, [userId]);
 
     const deleteFinancialProduct = useCallback(async (id: string) => {
-        const { error } = await supabase.from('financial_products').delete().eq('id', id);
+        if (!userId) return;
+        const { error } = await supabase.from('financial_products').delete().eq('user_id', userId).eq('id', id);
         if (error) { console.error('Delete product error:', error); return; }
         setFinancialProducts(prev => prev.filter(p => p.id !== id));
-    }, []);
+    }, [userId]);
 
     const getProductsByType = useCallback((type: FinancialProduct['type']) => {
         return financialProducts.filter(p => p.type === type);
@@ -672,12 +727,14 @@ export function useSupabaseFinanceData() {
 
     // ========== Loans ==========
     const addLoan = useCallback(async (loan: Omit<LoanItem, 'id'>) => {
+        if (!userId) throw new Error('로그인이 필요합니다.');
         // 거치 데이터를 memo 필드에 인코딩
         const memoStr = encodeLoanMemo(loan.memo, loan.hasGracePeriod, loan.gracePeriodMonths);
 
         const { data, error } = await supabase
             .from('loans')
             .insert({
+                user_id: userId,
                 name: loan.name,
                 bank: loan.bank,
                 loan_type: loan.loanType,
@@ -712,13 +769,14 @@ export function useSupabaseFinanceData() {
                     '  start_date DATE,\n' +
                     '  end_date DATE,\n' +
                     '  total_months INTEGER NOT NULL DEFAULT 0,\n' +
+                    '  user_id UUID NOT NULL,\n' +
                     '  owner TEXT NOT NULL DEFAULT \'shared\',\n' +
                     '  memo TEXT,\n' +
                     '  created_at TIMESTAMPTZ DEFAULT NOW()\n' +
                     ');\n' +
                     'ALTER TABLE loans ENABLE ROW LEVEL SECURITY;\n' +
                     'CREATE POLICY "loans_auth" ON loans\n' +
-                    '  FOR ALL TO authenticated USING (true) WITH CHECK (true);'
+                    '  FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());'
                 );
             }
             throw new Error(error.message || '대출 추가에 실패했습니다.');
@@ -728,7 +786,7 @@ export function useSupabaseFinanceData() {
             setLoans(prev => [...prev, newLoan]);
             return newLoan;
         }
-    }, []);
+    }, [userId]);
 
     const updateLoan = useCallback(async (id: string, updates: Partial<LoanItem>) => {
         const dbUpdates: Record<string, unknown> = {};
@@ -758,16 +816,18 @@ export function useSupabaseFinanceData() {
             dbUpdates.memo = encodeLoanMemo(mergedMemo, mergedHasGrace, mergedGraceMonths);
         }
 
-        const { error } = await supabase.from('loans').update(dbUpdates).eq('id', id);
+        if (!userId) return;
+        const { error } = await supabase.from('loans').update(dbUpdates).eq('user_id', userId).eq('id', id);
         if (error) { console.error('Update loan error:', error); return; }
         setLoans(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l));
-    }, [loans]);
+    }, [userId, loans]);
 
     const deleteLoan = useCallback(async (id: string) => {
-        const { error } = await supabase.from('loans').delete().eq('id', id);
+        if (!userId) return;
+        const { error } = await supabase.from('loans').delete().eq('user_id', userId).eq('id', id);
         if (error) { console.error('Delete loan error:', error); return; }
         setLoans(prev => prev.filter(l => l.id !== id));
-    }, []);
+    }, [userId]);
 
     const getTotalLoanRemaining = useMemo(() => {
         return loans.reduce((sum, l) => sum + l.remainingPrincipal, 0);
@@ -779,9 +839,10 @@ export function useSupabaseFinanceData() {
 
     // ========== Custom Categories ==========
     const addCustomCategory = useCallback(async (cat: Omit<CustomCategory, 'id'>): Promise<CustomCategory | undefined> => {
+        if (!userId) return undefined;
         const { data, error } = await supabase
             .from('custom_categories')
-            .insert({ name: cat.name, type: cat.type, icon: cat.icon || null, hidden: cat.hidden ?? false })
+            .insert({ user_id: userId, name: cat.name, type: cat.type, icon: cat.icon || null, hidden: cat.hidden ?? false })
             .select()
             .single();
 
@@ -797,72 +858,80 @@ export function useSupabaseFinanceData() {
             setCustomCategories(prev => [...prev, newCat]);
             return newCat;
         }
-    }, []);
+    }, [userId]);
 
     const updateCustomCategory = useCallback(async (id: string, updates: Partial<Omit<CustomCategory, 'id'>>) => {
         const updateData: Record<string, unknown> = {};
         if ('name' in updates) updateData.name = updates.name;
         if ('icon' in updates) updateData.icon = updates.icon ?? null;
         if ('hidden' in updates) updateData.hidden = updates.hidden;
+        if (!userId) return;
         const { error } = await supabase
             .from('custom_categories')
             .update(updateData)
+            .eq('user_id', userId)
             .eq('id', id);
         if (error) { console.error('Update custom category error:', error); return; }
         setCustomCategories(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
-    }, []);
+    }, [userId]);
 
     const deleteCustomCategory = useCallback(async (id: string) => {
-        const { error } = await supabase.from('custom_categories').delete().eq('id', id);
+        if (!userId) return;
+        const { error } = await supabase.from('custom_categories').delete().eq('user_id', userId).eq('id', id);
         if (error) { console.error('Delete custom category error:', error); return; }
         setCustomCategories(prev => prev.filter(c => c.id !== id));
-    }, []);
+    }, [userId]);
 
     // ========== Yearly Settings ==========
     const updateYearlySettings = useCallback(async (year: number, settings: { targetNetWorth?: number; startNetWorth?: number }) => {
+        if (!userId) return;
         const current = yearlySettings[year] || { targetNetWorth: 100000000, startNetWorth: 0 };
         const newSettings = { ...current, ...settings };
 
         const { error } = await supabase
             .from('yearly_settings')
             .upsert({
+                user_id: userId,
                 year,
                 target_net_worth: newSettings.targetNetWorth,
                 start_net_worth: newSettings.startNetWorth,
                 monthly_targets: newSettings.monthlyTargets || {},
                 chart_target_net_worth: newSettings.chartTargetNetWorth ?? null,
-            }, { onConflict: 'year' });
+            }, { onConflict: 'user_id,year' });
 
         if (error) { console.error('Update yearly settings error:', error); return; }
         setYearlySettings(prev => ({
             ...prev,
             [year]: newSettings,
         }));
-    }, [yearlySettings]);
+    }, [userId, yearlySettings]);
 
     const updateChartTarget = useCallback(async (year: number, value: number) => {
+        if (!userId) return;
         const current = yearlySettings[year] || { targetNetWorth: 100000000, startNetWorth: 0 };
         const { error } = await supabase
             .from('yearly_settings')
             .upsert({
+                user_id: userId,
                 year,
                 target_net_worth: current.targetNetWorth,
                 start_net_worth: current.startNetWorth,
                 monthly_targets: current.monthlyTargets || {},
                 chart_target_net_worth: value,
-            }, { onConflict: 'year' });
+            }, { onConflict: 'user_id,year' });
         if (error) { console.error('Update chart target error:', error); return; }
         setYearlySettings(prev => ({
             ...prev,
             [year]: { ...current, chartTargetNetWorth: value },
         }));
-    }, [yearlySettings]);
+    }, [userId, yearlySettings]);
 
     const getYearlySettings = useCallback((year: number) => {
         return yearlySettings[year] || { targetNetWorth: 100000000, startNetWorth: 0, chartTargetNetWorth: undefined };
     }, [yearlySettings]);
 
     const updateMonthlyTarget = useCallback(async (year: number, month: number, target: number) => {
+        if (!userId) return;
         const current = yearlySettings[year];
         const currentTargets = current?.monthlyTargets || {};
         const newTargets = { ...currentTargets, [month]: target };
@@ -870,11 +939,12 @@ export function useSupabaseFinanceData() {
         const { error } = await supabase
             .from('yearly_settings')
             .upsert({
+                user_id: userId,
                 year,
                 target_net_worth: current?.targetNetWorth || 100000000,
                 start_net_worth: current?.startNetWorth || 0,
                 monthly_targets: newTargets,
-            }, { onConflict: 'year' });
+            }, { onConflict: 'user_id,year' });
 
         if (error) { console.error('Update monthly target error:', error); return; }
         setYearlySettings(prev => ({
@@ -884,7 +954,7 @@ export function useSupabaseFinanceData() {
                 monthlyTargets: newTargets,
             },
         }));
-    }, [yearlySettings]);
+    }, [userId, yearlySettings]);
 
     const getMonthlyTargets = useCallback((year: number) => {
         return yearlySettings[year]?.monthlyTargets || {};

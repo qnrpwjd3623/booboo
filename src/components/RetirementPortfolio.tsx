@@ -32,13 +32,14 @@ export function RetirementPortfolio({ products }: RetirementPortfolioProps) {
   // 계좌의 현재 평가액 계산 (ETF 모드: livePrices 우선, 없으면 저장값)
   const getAccountValue = useCallback((product: FinancialProduct): number => {
     if (product.holdings && product.holdings.length > 0) {
+      const allLive = product.holdings.every((h) => livePrices[h.ticker] !== undefined);
+      if (!allLive) return product.currentValue;
+
       const total = product.holdings.reduce((sum, h) => {
-        const price = livePrices[h.ticker] ?? null;
-        return sum + (price !== null ? price * h.shares : 0);
+        const price = livePrices[h.ticker]!;
+        return sum + (price * h.shares);
       }, 0);
-      // 아직 가격 미조회면 저장된 currentValue 사용
-      const hasLive = product.holdings.some((h) => livePrices[h.ticker] !== undefined);
-      return hasLive ? Math.round(total) : product.currentValue;
+      return Math.round(total);
     }
     return product.currentValue;
   }, [livePrices]);

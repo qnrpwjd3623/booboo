@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Building2, Wallet, TrendingUp, Calendar, FileText,
@@ -158,7 +158,25 @@ export function FinancialProductForm({
       setHoldingsMode('cash');
       setHoldings([]);
     }
-  }, [type]);
+  }, [editProduct, type]);
+
+  const handleCoinFetch = useCallback(async () => {
+    if (!coinTicker) return;
+    setCoinFetchState('loading');
+    setCoinFetchedInfo(null);
+    const result = await fetchCoinPrice(coinTicker);
+    if (result) {
+      setCoinFetchedInfo(result);
+      if (!name) setName(result.name);
+      const qty = parseFloat(coinQuantity);
+      if (!isNaN(qty) && qty > 0) {
+        setCurrentValue(Math.round(result.currentPriceKRW * qty).toLocaleString());
+      }
+      setCoinFetchState('success');
+    } else {
+      setCoinFetchState('error');
+    }
+  }, [coinQuantity, coinTicker, name]);
 
   // 코인 티커 입력 시 자동 조회 (debounce 800ms)
   useEffect(() => {
@@ -171,7 +189,7 @@ export function FinancialProductForm({
     if (coinFetchTimerRef.current) clearTimeout(coinFetchTimerRef.current);
     coinFetchTimerRef.current = setTimeout(() => handleCoinFetch(), 800);
     return () => { if (coinFetchTimerRef.current) clearTimeout(coinFetchTimerRef.current); };
-  }, [coinTicker, type]);
+  }, [coinTicker, type, handleCoinFetch]);
 
   // 코인 수량 변경 시 현재 평가액 자동 계산
   useEffect(() => {
@@ -230,24 +248,6 @@ export function FinancialProductForm({
     // 숫자, 소수점만 허용 + 소수점 2자리까지
     const cleaned = avgPrice.replace(/[^0-9.]/g, '').replace(/^(\d*\.?\d{0,2}).*$/, '$1');
     setHoldings(prev => prev.map(h => h.id === id ? { ...h, avgPrice: cleaned } : h));
-  };
-
-  const handleCoinFetch = async () => {
-    if (!coinTicker) return;
-    setCoinFetchState('loading');
-    setCoinFetchedInfo(null);
-    const result = await fetchCoinPrice(coinTicker);
-    if (result) {
-      setCoinFetchedInfo(result);
-      if (!name) setName(result.name);
-      const qty = parseFloat(coinQuantity);
-      if (!isNaN(qty) && qty > 0) {
-        setCurrentValue(Math.round(result.currentPriceKRW * qty).toLocaleString());
-      }
-      setCoinFetchState('success');
-    } else {
-      setCoinFetchState('error');
-    }
   };
 
   const formatNumber = (value: string) => {
