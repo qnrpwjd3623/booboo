@@ -1,9 +1,9 @@
 # DB 스키마 — Supabase
 
 ## 핵심 원칙
-- 모든 데이터는 `household_id` 기준으로 분리됩니다.
-- 기본값은 `auth.uid()` 기준 개인 가계부입니다.
-- 두 계정이 같은 가계부를 공유하려면 두 사용자 메타데이터에 같은 `household_id`를 넣으면 됩니다.
+- 계정 1개 = 가계부 1개입니다.
+- 한 계정 안에서 `owner` 값으로 `남편`, `아내`, `공동(shared)`을 구분합니다.
+- 다른 계정의 데이터는 `user_id = auth.uid()` 기준으로 완전히 분리됩니다.
 
 ## 사용 테이블
 
@@ -23,36 +23,32 @@
 모든 업무 테이블은 아래 컬럼을 가집니다.
 
 ```sql
-household_id uuid not null
+user_id uuid not null
 ```
 
-앱은 로그인 사용자에서 다음 순서로 `household_id`를 결정합니다.
-
-1. `app_metadata.household_id`
-2. `user_metadata.household_id`
-3. 없으면 `auth.uid()`
+앱은 로그인한 Supabase 사용자 `auth.uid()`를 그대로 사용합니다.
 
 ## RLS
 
-각 테이블은 아래와 같은 정책을 사용합니다.
+각 테이블은 아래 정책으로 보호됩니다.
 
 ```sql
-using (household_id = public.current_household_id())
-with check (household_id = public.current_household_id())
+using (user_id = auth.uid())
+with check (user_id = auth.uid())
 ```
 
-즉, 같은 `household_id`를 가진 사용자만 같은 데이터를 읽고 쓸 수 있습니다.
+즉, 같은 계정으로 로그인한 사용자만 자기 데이터를 읽고 쓸 수 있습니다.
 
 ## 연간 설정 주의점
 
-`yearly_settings`는 더 이상 `year` 단독 키가 아닙니다.
+`yearly_settings`는 `year` 단독 키가 아니라 아래처럼 계정별 유니크입니다.
 
 ```sql
-create unique index ... on yearly_settings(household_id, year)
+create unique index ... on yearly_settings(user_id, year)
 ```
 
 그래서 다른 계정이 같은 연도를 저장해도 서로 덮어쓰지 않습니다.
 
 ## 참고 파일
 - 전체 스키마: [supabase-schema.sql](/Users/sallylover/Desktop/app/supabase-schema.sql:1)
-- 운영 적용 가이드: [supabase-household-migration.md](/Users/sallylover/Desktop/app/docs/supabase-household-migration.md:1)
+- 기존 데이터 보존용 적용 순서: [supabase-user-migration.md](/Users/sallylover/Desktop/app/docs/supabase-user-migration.md:1)

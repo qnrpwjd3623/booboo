@@ -1,30 +1,15 @@
 -- =============================================
 -- 부부 가계부 앱 Supabase 스키마
--- fresh setup + 기존 프로젝트 보강용
+-- 계정 1개 = 가계부 1개
+-- 같은 계정 안에서 owner 로 남편/아내/공동을 구분
 -- =============================================
 
 create extension if not exists pgcrypto;
 
--- household_id 규칙
--- 1) 부부가 같은 household_id를 user/app metadata에 넣으면 같은 데이터 공유
--- 2) household_id가 없으면 auth.uid() 기준으로 개인 격리
-
-create or replace function public.current_household_id()
-returns uuid
-language sql
-stable
-as $$
-  select coalesce(
-    nullif(auth.jwt() ->> 'household_id', '')::uuid,
-    nullif(auth.jwt() -> 'app_metadata' ->> 'household_id', '')::uuid,
-    auth.uid()
-  )
-$$;
-
 -- 1. 부부 프로필 테이블
 create table if not exists couple_profiles (
   id uuid default gen_random_uuid() primary key,
-  household_id uuid not null,
+  user_id uuid not null,
   partner1_name text not null default '파트너1',
   partner1_avatar text default '',
   partner1_emoji text default '👨',
@@ -37,14 +22,14 @@ create table if not exists couple_profiles (
   updated_at timestamptz default now()
 );
 
-alter table couple_profiles add column if not exists household_id uuid;
+alter table couple_profiles add column if not exists user_id uuid;
 alter table couple_profiles add column if not exists fp_order jsonb not null default '[]'::jsonb;
-create unique index if not exists idx_couple_profiles_household on couple_profiles(household_id);
+create unique index if not exists idx_couple_profiles_user on couple_profiles(user_id);
 
 -- 2. 거래 내역 테이블
 create table if not exists transactions (
   id uuid default gen_random_uuid() primary key,
-  household_id uuid not null,
+  user_id uuid not null,
   date text not null,
   year int not null,
   month int not null,
@@ -56,12 +41,12 @@ create table if not exists transactions (
   created_at timestamptz default now()
 );
 
-alter table transactions add column if not exists household_id uuid;
+alter table transactions add column if not exists user_id uuid;
 
 -- 3. 주식 포트폴리오 테이블
 create table if not exists stocks (
   id uuid default gen_random_uuid() primary key,
-  household_id uuid not null,
+  user_id uuid not null,
   name text not null,
   ticker text not null,
   shares int not null default 0,
@@ -73,12 +58,12 @@ create table if not exists stocks (
   updated_at timestamptz default now()
 );
 
-alter table stocks add column if not exists household_id uuid;
+alter table stocks add column if not exists user_id uuid;
 
 -- 4. 금융상품 테이블
 create table if not exists financial_products (
   id uuid default gen_random_uuid() primary key,
-  household_id uuid not null,
+  user_id uuid not null,
   type text not null check (type in ('irp', 'isa', 'pension', 'fund', 'deposit', 'savings', 'realestate', 'coin')),
   name text not null,
   company text not null default '',
@@ -93,7 +78,7 @@ create table if not exists financial_products (
   updated_at timestamptz default now()
 );
 
-alter table financial_products add column if not exists household_id uuid;
+alter table financial_products add column if not exists user_id uuid;
 do $$
 begin
   alter table financial_products drop constraint if exists financial_products_type_check;
@@ -106,7 +91,7 @@ end $$;
 -- 5. 연간 설정 테이블
 create table if not exists yearly_settings (
   id uuid default gen_random_uuid() primary key,
-  household_id uuid not null,
+  user_id uuid not null,
   year int not null,
   target_net_worth bigint not null default 100000000,
   start_net_worth bigint not null default 0,
@@ -116,10 +101,10 @@ create table if not exists yearly_settings (
   updated_at timestamptz default now()
 );
 
-alter table yearly_settings add column if not exists household_id uuid;
+alter table yearly_settings add column if not exists user_id uuid;
 alter table yearly_settings add column if not exists chart_target_net_worth bigint;
 drop index if exists idx_yearly_settings_year_unique;
-create unique index if not exists idx_yearly_settings_household_year on yearly_settings(household_id, year);
+create unique index if not exists idx_yearly_settings_user_year on yearly_settings(user_id, year);
 do $$
 begin
   alter table yearly_settings drop constraint if exists yearly_settings_year_key;
@@ -129,7 +114,7 @@ end $$;
 -- 6. 대출 테이블
 create table if not exists loans (
   id uuid default gen_random_uuid() primary key,
-  household_id uuid not null,
+  user_id uuid not null,
   name text not null,
   bank text not null default '',
   loan_type text not null default 'equal_payment',
@@ -146,12 +131,12 @@ create table if not exists loans (
   updated_at timestamptz default now()
 );
 
-alter table loans add column if not exists household_id uuid;
+alter table loans add column if not exists user_id uuid;
 
 -- 7. 사용자 정의 카테고리
 create table if not exists custom_categories (
   id uuid default gen_random_uuid() primary key,
-  household_id uuid not null,
+  user_id uuid not null,
   name text not null,
   type text not null check (type in ('income', 'expense')),
   icon text,
@@ -160,12 +145,12 @@ create table if not exists custom_categories (
   updated_at timestamptz default now()
 );
 
-alter table custom_categories add column if not exists household_id uuid;
+alter table custom_categories add column if not exists user_id uuid;
 
 -- 8. AI 코멘트 / 챌린지 저장
 create table if not exists ai_comments (
   id uuid default gen_random_uuid() primary key,
-  household_id uuid not null,
+  user_id uuid not null,
   type text not null check (type in ('bot', 'challenge')),
   name text not null default '',
   year int not null,
@@ -175,14 +160,14 @@ create table if not exists ai_comments (
   updated_at timestamptz default now()
 );
 
-alter table ai_comments add column if not exists household_id uuid;
-create unique index if not exists idx_ai_comments_household_month_type on ai_comments(household_id, year, month, type, name);
+alter table ai_comments add column if not exists user_id uuid;
+create unique index if not exists idx_ai_comments_user_month_type on ai_comments(user_id, year, month, type, name);
 
 -- 인덱스
-create index if not exists idx_transactions_household_year_month on transactions(household_id, year, month);
-create index if not exists idx_stocks_household_ticker on stocks(household_id, ticker);
-create index if not exists idx_loans_household on loans(household_id);
-create index if not exists idx_custom_categories_household on custom_categories(household_id);
+create index if not exists idx_transactions_user_year_month on transactions(user_id, year, month);
+create index if not exists idx_stocks_user_ticker on stocks(user_id, ticker);
+create index if not exists idx_loans_user on loans(user_id);
+create index if not exists idx_custom_categories_user on custom_categories(user_id);
 
 -- RLS
 alter table couple_profiles enable row level security;
@@ -194,53 +179,50 @@ alter table loans enable row level security;
 alter table custom_categories enable row level security;
 alter table ai_comments enable row level security;
 
-drop policy if exists "couple_profiles_household_access" on couple_profiles;
-create policy "couple_profiles_household_access" on couple_profiles
+drop policy if exists "couple_profiles_user_access" on couple_profiles;
+create policy "couple_profiles_user_access" on couple_profiles
   for all to authenticated
-  using (household_id = public.current_household_id())
-  with check (household_id = public.current_household_id());
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
 
-drop policy if exists "transactions_household_access" on transactions;
-create policy "transactions_household_access" on transactions
+drop policy if exists "transactions_user_access" on transactions;
+create policy "transactions_user_access" on transactions
   for all to authenticated
-  using (household_id = public.current_household_id())
-  with check (household_id = public.current_household_id());
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
 
-drop policy if exists "stocks_household_access" on stocks;
-create policy "stocks_household_access" on stocks
+drop policy if exists "stocks_user_access" on stocks;
+create policy "stocks_user_access" on stocks
   for all to authenticated
-  using (household_id = public.current_household_id())
-  with check (household_id = public.current_household_id());
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
 
-drop policy if exists "financial_products_household_access" on financial_products;
-create policy "financial_products_household_access" on financial_products
+drop policy if exists "financial_products_user_access" on financial_products;
+create policy "financial_products_user_access" on financial_products
   for all to authenticated
-  using (household_id = public.current_household_id())
-  with check (household_id = public.current_household_id());
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
 
-drop policy if exists "yearly_settings_household_access" on yearly_settings;
-create policy "yearly_settings_household_access" on yearly_settings
+drop policy if exists "yearly_settings_user_access" on yearly_settings;
+create policy "yearly_settings_user_access" on yearly_settings
   for all to authenticated
-  using (household_id = public.current_household_id())
-  with check (household_id = public.current_household_id());
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
 
-drop policy if exists "loans_household_access" on loans;
-create policy "loans_household_access" on loans
+drop policy if exists "loans_user_access" on loans;
+create policy "loans_user_access" on loans
   for all to authenticated
-  using (household_id = public.current_household_id())
-  with check (household_id = public.current_household_id());
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
 
-drop policy if exists "custom_categories_household_access" on custom_categories;
-create policy "custom_categories_household_access" on custom_categories
+drop policy if exists "custom_categories_user_access" on custom_categories;
+create policy "custom_categories_user_access" on custom_categories
   for all to authenticated
-  using (household_id = public.current_household_id())
-  with check (household_id = public.current_household_id());
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
 
-drop policy if exists "ai_comments_household_access" on ai_comments;
-create policy "ai_comments_household_access" on ai_comments
+drop policy if exists "ai_comments_user_access" on ai_comments;
+create policy "ai_comments_user_access" on ai_comments
   for all to authenticated
-  using (household_id = public.current_household_id())
-  with check (household_id = public.current_household_id());
-
--- 기본 데이터 예시
--- 기존 운영 데이터가 있으면 household_id를 수동으로 채운 뒤 실행하세요.
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
