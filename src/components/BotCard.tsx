@@ -6,20 +6,17 @@ import { useInView } from '@/hooks/useInView';
 
 interface BotCardProps {
   messages: BotMessage[];
-  currentNetWorth: number;
-  targetNetWorth: number;
+  progress: number;
   streak: number;
+  monthsLeft: number;
   onRefresh?: () => void;
   isLoading?: boolean;
 }
 
-export function BotCard({ messages, currentNetWorth, targetNetWorth, streak, onRefresh, isLoading = false }: BotCardProps) {
+export function BotCard({ messages, progress, streak, monthsLeft, onRefresh, isLoading = false }: BotCardProps) {
   const [ref, isInView] = useInView<HTMLDivElement>({ threshold: 0.2 });
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
   const [isTyping, setIsTyping] = useState(false);
-
-  const progress = (currentNetWorth / targetNetWorth) * 100;
-  const monthsLeft = 12 - new Date().getMonth() - 1;
 
   // Generate contextual message
   const getContextualMessage = (): BotMessage => {

@@ -907,9 +907,9 @@ function App() {
                 />
                 <BotCard
                   messages={botMessage ? [botMessage] : []}
-                  currentNetWorth={realCurrentYearData.currentNetWorth}
-                  targetNetWorth={yearlyData.targetNetWorth}
+                  progress={yearlyData.targetAmount > 0 ? (yearlyData.currentAmount / yearlyData.targetAmount) * 100 : 0}
                   streak={yearlyData.streak}
+                  monthsLeft={monthsLeft}
                   onRefresh={handleRefreshAdvice}
                   isLoading={isLoadingAdvice}
                 />
