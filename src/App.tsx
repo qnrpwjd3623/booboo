@@ -20,7 +20,7 @@ import { GoalSettingForm } from '@/components/GoalSettingForm';
 import { CoupleProfileSettings, type CoupleProfile } from '@/components/CoupleProfile';
 import { LoginPage } from '@/components/LoginPage';
 import { useSupabaseFinanceData } from '@/hooks/useSupabaseFinanceData';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, getHouseholdId } from '@/hooks/useAuth';
 import { supabase } from '@/services/supabaseClient';
 import { fetchMultipleStockPrices } from '@/services/stockApi';
 import { getFinancialAdvice, getMonthlyChallenge, type FinancialContext } from '@/services/aiApi';
@@ -135,6 +135,7 @@ function waGwa(name: string): string {
 
 function App() {
   const { user, isLoading: authLoading, signIn, signOut } = useAuth();
+  const householdId = getHouseholdId(user);
 
   const [selectedYear, setSelectedYear] = useState(() => {
     const saved = localStorage.getItem('booboo_selected_year');
@@ -155,6 +156,8 @@ function App() {
 
   // 부부동산봇/챌린지 — Supabase에서 이번 달 데이터 불러오기
   useEffect(() => {
+    if (!householdId) return;
+
     const now = new Date();
     const y = now.getFullYear();
     const m = now.getMonth() + 1;
@@ -162,6 +165,7 @@ function App() {
       const { data } = await supabase
         .from('ai_comments')
         .select('type, comment')
+        .eq('household_id', householdId)
         .eq('year', y)
         .eq('month', m)
         .in('type', ['bot', 'challenge']);
@@ -176,7 +180,7 @@ function App() {
       setDbLoadDone(true);
     };
     load();
-  }, []);
+  }, [householdId]);
 
   const [isTransactionFormOpen, setIsTransactionFormOpen] = useState(false);
   const [isStockFormOpen, setIsStockFormOpen] = useState(false);
@@ -236,7 +240,7 @@ function App() {
     updateCoupleProfile,
     fpOrder,
     updateFpOrder,
-  } = useSupabaseFinanceData();
+  } = useSupabaseFinanceData(user);
 
   // couple profile — DB에서 로드, 변경 시 DB에 저장 (기기간 동기화)
   const profile: CoupleProfile = {
@@ -396,13 +400,13 @@ function App() {
       setBotMessage(msg);
       const now = new Date();
       const y = now.getFullYear(); const m = now.getMonth() + 1;
-      await supabase.from('ai_comments').delete().eq('type', 'bot').eq('name', '').eq('year', y).eq('month', m);
-      const { error: bErr } = await supabase.from('ai_comments').insert({ type: 'bot', name: '', year: y, month: m, comment: JSON.stringify(msg) });
+      await supabase.from('ai_comments').delete().eq('household_id', householdId).eq('type', 'bot').eq('name', '').eq('year', y).eq('month', m);
+      const { error: bErr } = await supabase.from('ai_comments').insert({ household_id: householdId, type: 'bot', name: '', year: y, month: m, comment: JSON.stringify(msg) });
       if (bErr) console.error('봇 저장 실패:', bErr);
     } finally {
       setIsLoadingAdvice(false);
     }
-  }, [buildFinancialContext]);
+  }, [buildFinancialContext, householdId]);
 
   // 월간 챌린지 새로고침 (버튼 클릭 시에만 호출)
   const handleRefreshChallenge = useCallback(async () => {
@@ -415,8 +419,8 @@ function App() {
         try {
           const now = new Date();
           const y = now.getFullYear(); const m = now.getMonth() + 1;
-          await supabase.from('ai_comments').delete().eq('type', 'challenge').eq('name', '').eq('year', y).eq('month', m);
-          const { error: cErr } = await supabase.from('ai_comments').insert({ type: 'challenge', name: '', year: y, month: m, comment: JSON.stringify(challengeData) });
+          await supabase.from('ai_comments').delete().eq('household_id', householdId).eq('type', 'challenge').eq('name', '').eq('year', y).eq('month', m);
+          const { error: cErr } = await supabase.from('ai_comments').insert({ household_id: householdId, type: 'challenge', name: '', year: y, month: m, comment: JSON.stringify(challengeData) });
           if (cErr) console.error('챌린지 DB 저장 실패:', cErr.message, cErr.details);
         } catch (saveErr) {
           console.error('챌린지 저장 예외:', saveErr);
@@ -427,7 +431,7 @@ function App() {
     } finally {
       setIsLoadingChallenge(false);
     }
-  }, [buildFinancialContext]);
+  }, [buildFinancialContext, householdId]);
 
   // 챌린지 currentReduction + 금액 실시간 계산 (카테고리 기반 지난달 vs 이번달 비교)
   const challengeWithProgress = useMemo(() => {

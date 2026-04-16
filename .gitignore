@@ -30,3 +30,4 @@ dist-ssr
 
 # Claude context (로컬 전용)
 CLAUDE.md
+.claude/

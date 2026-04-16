@@ -1,71 +1,58 @@
 # DB 스키마 — Supabase
 
-## 접속 정보
-- **Project URL**: `https://cxyranplnsmkrayprfkw.supabase.co`
-- **Anon Key**: `src/services/supabaseClient.ts` 참고
-- **클라이언트**: `src/services/supabaseClient.ts`
-- 별도 배포 없음 — 클라이언트에서 직접 API 호출
+## 핵심 원칙
+- 모든 데이터는 `household_id` 기준으로 분리됩니다.
+- 기본값은 `auth.uid()` 기준 개인 가계부입니다.
+- 두 계정이 같은 가계부를 공유하려면 두 사용자 메타데이터에 같은 `household_id`를 넣으면 됩니다.
 
-## 테이블 목록
+## 사용 테이블
 
 | 테이블 | 설명 |
 |--------|------|
-| `couple_profiles` | 커플 프로필 (이름, 이모지, 연간목표, fp_order) |
-| `transactions` | 거래내역 (수입/지출, owner 필드로 소유자 구분) |
+| `couple_profiles` | 부부 프로필, `fp_order` 포함 |
+| `transactions` | 수입/지출 거래내역 |
 | `stocks` | 주식 보유 종목 |
-| `financial_products` | 금융상품 (IRP/ISA/DC퇴직금/예금/적금/부동산/코인) |
+| `financial_products` | IRP/ISA/연금/예금/적금/부동산/코인 |
 | `loans` | 대출 정보 |
-| `ai_comments` | AI 코멘트 저장 (type: person/bot/challenge) |
-| `yearly_settings` | 연간 목표, 시작 순자산, chart_target_net_worth |
-| `custom_categories` | 커스텀 카테고리 (hidden 필드로 빌트인 숨김 처리) |
+| `yearly_settings` | 연간 목표, 시작 순자산, 월 목표, 차트 목표 |
+| `custom_categories` | 사용자 정의 카테고리 |
+| `ai_comments` | 봇 코멘트, 월간 챌린지 |
 
-## 주요 스키마 상세
+## 분리 키
 
-### ai_comments
+모든 업무 테이블은 아래 컬럼을 가집니다.
+
 ```sql
-id uuid PK, type TEXT, name TEXT, year INT, month INT,
-comment TEXT, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ,
-UNIQUE(type, name, year, month)
--- RLS 비활성화됨
+household_id uuid not null
 ```
 
-### couple_profiles 추가 컬럼
+앱은 로그인 사용자에서 다음 순서로 `household_id`를 결정합니다.
+
+1. `app_metadata.household_id`
+2. `user_metadata.household_id`
+3. 없으면 `auth.uid()`
+
+## RLS
+
+각 테이블은 아래와 같은 정책을 사용합니다.
+
 ```sql
-ALTER TABLE couple_profiles ADD COLUMN IF NOT EXISTS fp_order jsonb;
+using (household_id = public.current_household_id())
+with check (household_id = public.current_household_id())
 ```
 
-### yearly_settings 추가 컬럼
+즉, 같은 `household_id`를 가진 사용자만 같은 데이터를 읽고 쓸 수 있습니다.
+
+## 연간 설정 주의점
+
+`yearly_settings`는 더 이상 `year` 단독 키가 아닙니다.
+
 ```sql
-ALTER TABLE yearly_settings ADD COLUMN IF NOT EXISTS chart_target_net_worth bigint;
+create unique index ... on yearly_settings(household_id, year)
 ```
 
-### custom_categories
-```sql
-id uuid PK, name TEXT, type TEXT, icon TEXT, hidden BOOLEAN DEFAULT false,
-created_at TIMESTAMPTZ
--- hidden=true: 카테고리 피커에서 숨김 (빌트인 삭제 대신 사용)
-```
+그래서 다른 계정이 같은 연도를 저장해도 서로 덮어쓰지 않습니다.
 
-## 주의사항
-
-### couple_profiles 중복 방지
-`.single()` 버그 → 배열 조회 후 수동 dedup:
-```typescript
-const { data: rows } = await supabase.from('couple_profiles')
-  .select('*').order('created_at', { ascending: true });
-const data = rows[0];
-if (rows.length > 1) {
-  await supabase.from('couple_profiles').delete()
-    .in('id', rows.slice(1).map(r => r.id));
-}
-```
-
-### ai_comments 저장 방식
-upsert onConflict 묵시적 실패 케이스 있음 → DELETE + INSERT 사용:
-```typescript
-await supabase.from('ai_comments').delete()
-  .eq('type', t).eq('name', n).eq('year', y).eq('month', m);
-await supabase.from('ai_comments').insert(
-  { type: t, name: n, year: y, month: m, comment: c }
-);
-```
+## 참고 파일
+- 전체 스키마: [supabase-schema.sql](/Users/sallylover/Desktop/app/supabase-schema.sql:1)
+- 운영 적용 가이드: [supabase-household-migration.md](/Users/sallylover/Desktop/app/docs/supabase-household-migration.md:1)
