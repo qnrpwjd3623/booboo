@@ -14,7 +14,9 @@ import {
   Legend,
   Cell,
 } from 'recharts';
+import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import type { MonthlyData } from '@/types';
+import { calculateGrowthRate } from '@/utils/format';
 import { useInView } from '@/hooks/useInView';
 
 interface NetWorthChartProps {
@@ -63,6 +65,9 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
       <p className="text-xl font-bold text-gray-900 mb-1 tabular-nums tracking-tight">
         {displayValue.toLocaleString('ko-KR')}원
       </p>
+      {data.isEstimated && (
+        <p className="text-[11px] text-gray-400 mb-2">기록 없음 · 가계부로 역산한 추정치</p>
+      )}
       <div className="flex items-center gap-2 text-sm">
         <span className="text-gray-500">저축률:</span>
         <span className={`font-medium ${data.savingsRate >= 40 ? 'text-green-500' : 'text-orange-500'}`}>
@@ -116,17 +121,32 @@ function BarTooltip({ active, payload, label }: BarTooltipProps) {
   return null;
 }
 
+// 역산 추정치인 달만 회색 점으로 표시 (실제 기록된 달은 점 없음)
+function EstimateDot(props: { cx?: number; cy?: number; payload?: { isEstimated?: boolean } }) {
+  const { cx, cy, payload } = props;
+  if (cx == null || cy == null || !payload?.isEstimated) return null;
+  return <circle cx={cx} cy={cy} r={3.5} fill="#C7C7CC" stroke="#fff" strokeWidth={1.5} />;
+}
+
 export function NetWorthChart({ monthlyData }: NetWorthChartProps) {
   const [ref, isInView] = useInView<HTMLDivElement>({ threshold: 0.2 });
 
-  // 순자산은 수동 입력 자산 기준이라 월별 이력이 없다 → 12개월 모두 현재 순자산 값
+  // 기록이 있는 달만 선을 그린다 (미래 달, 아직 입력 전인 달은 null)
   const chartData = monthlyData.map(d => ({
     ...d,
-    netWorth: d.netWorth / 100000000,
+    netWorth: d.hasSnapshot ? d.netWorth / 100000000 : null,
   }));
 
+  const recorded = monthlyData.filter(d => d.hasSnapshot);
+  const latest = recorded[recorded.length - 1];
+  const previous = recorded.length > 1 ? recorded[recorded.length - 2] : null;
+  const monthlyGrowth = latest && previous && previous.netWorth > 0
+    ? calculateGrowthRate(latest.netWorth, previous.netWorth)
+    : 0;
+  const hasEstimates = recorded.some(d => d.isEstimated);
+
   // Smart Y-axis domain: fit the actual data range, with padding
-  const chartValues = chartData.map(d => d.netWorth);
+  const chartValues = chartData.filter(d => d.netWorth != null).map(d => d.netWorth as number);
   const dataMin = chartValues.length > 0 ? Math.min(...chartValues) : 0;
   const dataMax = chartValues.length > 0 ? Math.max(...chartValues) : 1;
   const range = dataMax - dataMin;
@@ -146,8 +166,19 @@ export function NetWorthChart({ monthlyData }: NetWorthChartProps) {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-1">순자산 추이</h3>
-          <p className="text-sm text-gray-500">현재 순자산 (자산 - 대출) 기준</p>
+          <p className="text-sm text-gray-500">
+            자산을 수정한 달에 기록된 순자산{hasEstimates && ' · 회색 점은 추정치'}
+          </p>
         </div>
+        {previous && (
+          <div className="text-right">
+            <p className="text-xs text-gray-500 mb-1">전월대비</p>
+            <div className={`flex items-center gap-1 ${monthlyGrowth >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {monthlyGrowth >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+              <span className="text-sm font-semibold">{Math.abs(monthlyGrowth).toFixed(1)}%</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Chart */}
@@ -189,7 +220,8 @@ export function NetWorthChart({ monthlyData }: NetWorthChartProps) {
               fill="url(#colorNetWorth)"
               animationDuration={2000}
               animationBegin={300}
-              dot={false}
+              connectNulls={false}
+              dot={<EstimateDot />}
               activeDot={{ r: 8, fill: '#007AFF', stroke: '#fff', strokeWidth: 3 }}
             />
           </AreaChart>
