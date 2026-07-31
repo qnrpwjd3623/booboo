@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, X, Minus, Pencil } from 'lucide-react';
+import { playUiSound } from '@/hooks/useUiSound';
 import type { MonthlyData } from '@/types';
 import { useInView } from '@/hooks/useInView';
 
@@ -47,6 +48,7 @@ export function MonthlyHeatmap({ year, monthlyData, monthlyTargets, onUpdateTarg
     e.stopPropagation();
     if (editingMonth === data.month) return; // Already editing this month
     const currentTarget = monthlyTargets[data.month] ?? data.targetSavingsRate;
+    playUiSound('tap');
     setEditValue(String(currentTarget));
     setEditingMonth(data.month);
   }, [editingMonth, monthlyTargets]);
@@ -56,11 +58,13 @@ export function MonthlyHeatmap({ year, monthlyData, monthlyTargets, onUpdateTarg
     const parsed = parseFloat(editValue);
     if (!isNaN(parsed) && parsed >= 0 && parsed <= 100) {
       onUpdateTarget(editingMonth, parsed);
+      playUiSound('save');
     }
     setEditingMonth(null);
   }, [editingMonth, editValue, onUpdateTarget]);
 
   const handleCancelEdit = useCallback(() => {
+    playUiSound('close');
     setEditingMonth(null);
   }, []);
 

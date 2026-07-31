@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { playUiSound } from '@/hooks/useUiSound';
 
 interface YearSelectorProps {
   selectedYear: number;
@@ -35,23 +36,32 @@ export function YearSelector({
 
   const handlePrevPage = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setPageOffset(prev => Math.max(0, prev - 1));
+    setPageOffset(prev => {
+      const next = Math.max(0, prev - 1);
+      if (next !== prev) playUiSound('nav');
+      return next;
+    });
   };
 
   const handleNextPage = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setPageOffset(prev => Math.min(totalPages - 1, prev + 1));
+    setPageOffset(prev => {
+      const next = Math.min(totalPages - 1, prev + 1);
+      if (next !== prev) playUiSound('nav');
+      return next;
+    });
   };
 
   const handleYearSelect = (year: number) => {
     onYearChange(year);
+    playUiSound('select');
     setIsOpen(false);
   };
 
   return (
     <div className="relative">
       <motion.button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => { playUiSound(isOpen ? 'close' : 'tap'); setIsOpen(!isOpen); }}
         className="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-2 sm:py-3 bg-white rounded-xl sm:rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.08)] transition-shadow"
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}

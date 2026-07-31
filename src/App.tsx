@@ -19,7 +19,6 @@ import { LoanList } from '@/components/LoanList';
 import { GoalSettingForm } from '@/components/GoalSettingForm';
 import { CoupleProfileSettings, type CoupleProfile } from '@/components/CoupleProfile';
 import { LoginPage } from '@/components/LoginPage';
-import { IntroSplash } from '@/components/IntroSplash';
 import { useUiSound } from '@/hooks/useUiSound';
 import { useSupabaseFinanceData } from '@/hooks/useSupabaseFinanceData';
 import { useAuth } from '@/hooks/useAuth';
@@ -137,15 +136,6 @@ function waGwa(name: string): string {
 function App() {
   const { user, isLoading: authLoading, signIn, signOut } = useAuth();
   const { play, enabled: soundOn, toggle: toggleSound } = useUiSound();
-
-  // 인트로는 로그인한 브라우저 세션당 한 번만. 새로고침마다 다시 보면 금방 질린다.
-  const [showIntro, setShowIntro] = useState(() =>
-    typeof window !== 'undefined' && sessionStorage.getItem('booboo_intro_seen') !== '1'
-  );
-  const dismissIntro = useCallback(() => {
-    sessionStorage.setItem('booboo_intro_seen', '1');
-    setShowIntro(false);
-  }, []);
   const userId = user?.id ?? null;
 
   const [selectedYear, setSelectedYear] = useState(() => {
@@ -717,14 +707,6 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[#F5F5F7]">
-      {showIntro && (
-        <IntroSplash
-          word={profile.coupleName}
-          caption={`${profile.partner1.name} · ${profile.partner2.name}`}
-          onDone={dismissIntro}
-        />
-      )}
-
       {/* Header */}
       <header className="sticky top-0 z-40 bg-[#F5F5F7]/80 backdrop-blur-xl border-b border-gray-200/50">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
@@ -770,7 +752,7 @@ function App() {
             {/* Desktop Actions */}
             <div className="hidden md:flex items-center gap-3">
               <button
-                onClick={() => setIsGoalOpen(true)}
+                onClick={() => { play('open'); setIsGoalOpen(true); }}
                 className="flex items-center gap-2 px-4 py-2 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-700"
               >
                 <Target className="w-4 h-4 text-orange-500" />
@@ -796,7 +778,7 @@ function App() {
                 {soundOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
               </button>
               <button
-                onClick={signOut}
+                onClick={() => { play('close'); signOut(); }}
                 title="로그아웃"
                 className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-500 hover:text-red-500"
               >
@@ -1008,40 +990,41 @@ function App() {
               })()}
             </div>
 
-            {/* 주 작업 영역 — 순자산 추이가 이 화면의 주인공이라 전폭으로 둔다.
-                예전에는 12칼럼 중 5칼럼만 쓰면서 양옆 칼럼보다 훨씬 길어져
-                좌우에 500px 가까운 빈 공간을 만들었다. */}
-            <div className="mb-4 sm:mb-6">
-              <NetWorthChart monthlyData={yearlyData.monthlyData} />
-            </div>
+            {/* Main Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
+              <div className="lg:col-span-3">
+                <GoalProgress
+                  currentAmount={yearlyData.currentAmount}
+                  targetAmount={yearlyData.targetAmount}
+                  streak={yearlyData.streak}
+                  challenge={challengeWithProgress}
+                  prevMonthAmount={challengeWithProgress?.prevMonthAmount ?? 0}
+                  thisMonthAmount={challengeWithProgress?.thisMonthAmount ?? 0}
+                  monthsLeft={monthsLeft}
+                  isLoadingChallenge={isLoadingChallenge}
+                />
+              </div>
 
-            {/* 보조 영역 — 높이가 비슷한 것끼리 3등분.
-                items-start로 짧은 카드가 긴 카드 높이에 맞춰 늘어나지 않게 한다. */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 items-start">
-              <GoalProgress
-                currentAmount={yearlyData.currentAmount}
-                targetAmount={yearlyData.targetAmount}
-                streak={yearlyData.streak}
-                challenge={challengeWithProgress}
-                prevMonthAmount={challengeWithProgress?.prevMonthAmount ?? 0}
-                thisMonthAmount={challengeWithProgress?.thisMonthAmount ?? 0}
-                monthsLeft={monthsLeft}
-                isLoadingChallenge={isLoadingChallenge}
-              />
-              <MonthlyHeatmap
-                year={selectedYear}
-                monthlyData={yearlyData.monthlyData}
-                monthlyTargets={monthlyTargets}
-                onUpdateTarget={(month, target) => updateMonthlyTarget(selectedYear, month, target)}
-              />
-              <BotCard
-                messages={botMessage ? [botMessage] : []}
-                progress={yearlyData.targetAmount > 0 ? (yearlyData.currentAmount / yearlyData.targetAmount) * 100 : 0}
-                streak={yearlyData.streak}
-                monthsLeft={monthsLeft}
-                onRefresh={handleRefreshAdvice}
-                isLoading={isLoadingAdvice}
-              />
+              <div className="lg:col-span-5">
+                <NetWorthChart monthlyData={yearlyData.monthlyData} />
+              </div>
+
+              <div className="lg:col-span-4 space-y-4 sm:space-y-6">
+                <MonthlyHeatmap
+                  year={selectedYear}
+                  monthlyData={yearlyData.monthlyData}
+                  monthlyTargets={monthlyTargets}
+                  onUpdateTarget={(month, target) => updateMonthlyTarget(selectedYear, month, target)}
+                />
+                <BotCard
+                  messages={botMessage ? [botMessage] : []}
+                  progress={yearlyData.targetAmount > 0 ? (yearlyData.currentAmount / yearlyData.targetAmount) * 100 : 0}
+                  streak={yearlyData.streak}
+                  monthsLeft={monthsLeft}
+                  onRefresh={handleRefreshAdvice}
+                  isLoading={isLoadingAdvice}
+                />
+              </div>
             </div>
 
             {/* Stock Portfolio */}
@@ -1060,7 +1043,7 @@ function App() {
 
             {/* 자산 & 금융상품 + 대출 현황 — 2열 그리드 (lg 이상) */}
             {(financialProducts.length > 0 || loans.length > 0) && (
-              <div className={`mt-6 sm:mt-8 ${financialProducts.length > 0 && loans.length > 0 ? 'grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start' : ''}`}>
+              <div className={`mt-6 sm:mt-8 ${financialProducts.length > 0 && loans.length > 0 ? 'grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6' : ''}`}>
                 {financialProducts.length > 0 && (
                   <FinancialProductsList
                     products={financialProducts}

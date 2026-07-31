@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
+import { playUiSound } from '@/hooks/useUiSound';
 
 interface ModalProps {
   isOpen: boolean;
@@ -11,6 +12,12 @@ interface ModalProps {
 }
 
 export function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-lg' }: ModalProps) {
+  // 배경 클릭, X 버튼, Escape 어느 쪽으로 닫아도 같은 소리가 나야 한다
+  const close = useCallback(() => {
+    playUiSound('close');
+    onClose();
+  }, [onClose]);
+
   // Lock body scroll when modal is open
   useEffect(() => {
     if (isOpen) {
@@ -27,12 +34,12 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-lg' 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
-        onClose();
+        close();
       }
     };
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [isOpen, onClose]);
+  }, [isOpen, close]);
 
   return (
     <AnimatePresence>
@@ -45,7 +52,7 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-lg' 
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100]"
-            onClick={onClose}
+            onClick={close}
           />
 
           {/* Modal Container - Centered */}
@@ -62,7 +69,7 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-lg' 
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white sticky top-0 z-10">
                 <h3 className="text-lg font-bold text-gray-900">{title}</h3>
                 <button
-                  onClick={onClose}
+                  onClick={close}
                   className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
                 >
                   <X className="w-5 h-5 text-gray-500" />

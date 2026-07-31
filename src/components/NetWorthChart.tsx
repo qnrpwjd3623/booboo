@@ -149,7 +149,7 @@ export function NetWorthChart({ monthlyData }: NetWorthChartProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={isInView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.6, delay: 0.2 }}
-      className="surface-primary p-6 sm:p-8"
+      className="surface-primary p-6 h-full"
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
