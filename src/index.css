@@ -24,15 +24,38 @@
     --input: 240 5.9% 90%;
     --ring: 211 100% 50%;
     --radius: 0.625rem;
-    
-    /* Apple Colors */
-    --apple-blue: #007AFF;
-    --apple-green: #34C759;
-    --apple-orange: #FF9500;
-    --apple-red: #FF3B30;
+
+    /* ---- Radius scale: three steps, nothing else ---- */
+    --r-control: 8px;   /* buttons, inputs, chips */
+    --r-surface: 16px;  /* cards, panels, list rows */
+    --r-pill: 9999px;   /* avatars, tags, progress bars */
+
+    /* ---- Colour tokens ----
+       accent is the one brand colour: charts, links, active states.
+       gain and loss are reserved for money moving up or down. Nothing
+       else may use them or the signal stops meaning anything.
+       Everything else is neutral. */
+    --c-accent: #007AFF;
+    --c-accent-soft: #EAF3FF;
+    --c-gain: #34C759;
+    --c-loss: #FF3B30;
+    --c-warn: #FF9500;
+
+    --c-ink: #111827;     /* primary text */
+    --c-ink-2: #4B5563;   /* secondary text */
+    --c-ink-3: #6B7280;   /* labels and captions, AA on white */
+    --c-line: #E9E9EE;    /* hairlines and dividers */
+    --c-surface: #FFFFFF;
+    --c-canvas: #F5F5F7;
+
+    /* Legacy aliases so existing rules keep working */
+    --apple-blue: var(--c-accent);
+    --apple-green: var(--c-gain);
+    --apple-orange: var(--c-warn);
+    --apple-red: var(--c-loss);
     --apple-purple: #AF52DE;
-    --apple-gray: #8E8E93;
-    --apple-bg: #F5F5F7;
+    --apple-gray: var(--c-ink-3);
+    --apple-bg: var(--c-canvas);
   }
 }
 
@@ -47,13 +70,59 @@
   
   body {
     @apply bg-[#F5F5F7] text-foreground antialiased;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
+      'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Korean text sits better with slightly tighter tracking at display sizes */
+    letter-spacing: -0.01em;
+  }
+
+  /* Money and dates line up in columns */
+  .tabular, [class*="tabular-nums"] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  h1, h2, h3, h4 {
+    letter-spacing: -0.02em;
   }
 }
 
 @layer components {
+  /* ---- Surfaces ----
+     Flat panels with a hairline, not floating cards. Nine drop-shadowed
+     cards on a grey page read as a mosaic with no hierarchy; a hairline
+     panel reads as one layout with sections in it. */
+  .surface {
+    @apply bg-white rounded-[16px] border;
+    border-color: var(--c-line);
+  }
+
+  /* The one primary work area on the page. Slightly larger radius and
+     padding so it reads as the main surface, not another sibling card. */
+  .surface-primary {
+    @apply bg-white rounded-[20px] border;
+    border-color: var(--c-line);
+  }
+
+  /* ---- Type roles ----
+     Two tiers only. Previously seven H3s shared one style, so the page
+     said "all these are peers" when some are clearly primary. */
+  .workspace-title {
+    @apply text-[20px] font-bold;
+    color: var(--c-ink);
+  }
+
+  .section-title {
+    @apply text-[15px] font-semibold;
+    color: var(--c-ink-2);
+  }
+
+  .section-sub {
+    @apply text-[13px];
+    color: var(--c-ink-3);
+  }
+
   /* Apple-style card hover effect */
   .apple-card {
     @apply bg-white rounded-[24px] shadow-[0_4px_24px_rgba(0,0,0,0.04)];

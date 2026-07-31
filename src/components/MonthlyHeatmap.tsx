@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, X, Minus, Pencil } from 'lucide-react';
+import { playUiSound } from '@/hooks/useUiSound';
 import type { MonthlyData } from '@/types';
 import { useInView } from '@/hooks/useInView';
 
@@ -47,6 +48,7 @@ export function MonthlyHeatmap({ year, monthlyData, monthlyTargets, onUpdateTarg
     e.stopPropagation();
     if (editingMonth === data.month) return; // Already editing this month
     const currentTarget = monthlyTargets[data.month] ?? data.targetSavingsRate;
+    playUiSound('tap');
     setEditValue(String(currentTarget));
     setEditingMonth(data.month);
   }, [editingMonth, monthlyTargets]);
@@ -56,11 +58,13 @@ export function MonthlyHeatmap({ year, monthlyData, monthlyTargets, onUpdateTarg
     const parsed = parseFloat(editValue);
     if (!isNaN(parsed) && parsed >= 0 && parsed <= 100) {
       onUpdateTarget(editingMonth, parsed);
+      playUiSound('save');
     }
     setEditingMonth(null);
   }, [editingMonth, editValue, onUpdateTarget]);
 
   const handleCancelEdit = useCallback(() => {
+    playUiSound('close');
     setEditingMonth(null);
   }, []);
 
@@ -92,9 +96,9 @@ export function MonthlyHeatmap({ year, monthlyData, monthlyTargets, onUpdateTarg
       initial={{ opacity: 0, y: 20 }}
       animate={isInView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.6, delay: 0.4 }}
-      className="bg-white rounded-[28px] p-6 shadow-[0_4px_24px_rgba(0,0,0,0.04)]"
+      className="surface p-6"
     >
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">월별 달성 현황</h3>
+      <h3 className="section-title mb-4">월별 달성 현황</h3>
 
       <div className="grid grid-cols-4 gap-3">
         {monthlyData.map((data, index) => {

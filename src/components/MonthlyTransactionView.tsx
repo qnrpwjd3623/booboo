@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Plus, Pencil, Trash2, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, ImagePlus, ArrowUp, ArrowDown } from 'lucide-react';
+import { playUiSound } from '@/hooks/useUiSound';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import type { Transaction, CustomCategory } from '@/types';
 import { getCategoryIcon } from '@/constants/categories';
@@ -127,7 +128,7 @@ export function MonthlyTransactionView({
         <div className="max-w-[1200px] mx-auto flex items-center gap-3">
           {/* 뒤로가기 */}
           <button
-            onClick={onBack}
+            onClick={() => { playUiSound('close'); onBack(); }}
             className="w-9 h-9 flex items-center justify-center rounded-xl bg-white shadow-sm hover:shadow-md transition-all flex-shrink-0"
           >
             <ArrowLeft className="w-5 h-5 text-gray-600" />
@@ -139,6 +140,7 @@ export function MonthlyTransactionView({
               onClick={() => {
                 if (month === 1) onNavigate(year - 1, 12);
                 else onNavigate(year, month - 1);
+                playUiSound('nav');
               }}
               className="w-8 h-8 flex items-center justify-center rounded-xl bg-white shadow-sm hover:shadow-md hover:bg-orange-50 hover:text-orange-500 text-gray-500 transition-all flex-shrink-0"
             >
@@ -154,6 +156,7 @@ export function MonthlyTransactionView({
               onClick={() => {
                 if (month === 12) onNavigate(year + 1, 1);
                 else onNavigate(year, month + 1);
+                playUiSound('nav');
               }}
               className="w-8 h-8 flex items-center justify-center rounded-xl bg-white shadow-sm hover:shadow-md hover:bg-orange-50 hover:text-orange-500 text-gray-500 transition-all flex-shrink-0"
             >

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, CalendarDays, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { playUiSound } from '@/hooks/useUiSound';
 
 interface MonthSelectorProps {
   selectedMonth: number | null;
@@ -37,11 +38,16 @@ export function MonthSelector({ selectedMonth, onMonthChange }: MonthSelectorPro
         left: Math.max(8, left),
       });
     }
-    setIsOpen((prev) => !prev);
+    setIsOpen((prev) => {
+      playUiSound(prev ? 'close' : 'tap');
+      return !prev;
+    });
   };
 
   const handleSelect = (month: number) => {
-    onMonthChange(selectedMonth === month ? null : month);
+    const clearing = selectedMonth === month;
+    onMonthChange(clearing ? null : month);
+    playUiSound(clearing ? 'close' : 'select');
     setIsOpen(false);
   };
 
@@ -65,6 +71,7 @@ export function MonthSelector({ selectedMonth, onMonthChange }: MonthSelectorPro
             onClick={(e) => {
               e.stopPropagation();
               onMonthChange(null);
+              playUiSound('close');
             }}
             className="ml-0.5 hover:bg-orange-400 rounded-full p-0.5 transition-colors"
           >

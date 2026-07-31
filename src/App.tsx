@@ -19,12 +19,13 @@ import { LoanList } from '@/components/LoanList';
 import { GoalSettingForm } from '@/components/GoalSettingForm';
 import { CoupleProfileSettings, type CoupleProfile } from '@/components/CoupleProfile';
 import { LoginPage } from '@/components/LoginPage';
+import { useUiSound } from '@/hooks/useUiSound';
 import { useSupabaseFinanceData } from '@/hooks/useSupabaseFinanceData';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/services/supabaseClient';
 import { fetchMultipleStockPrices } from '@/services/stockApi';
 import { getFinancialAdvice, getMonthlyChallenge, type FinancialContext } from '@/services/aiApi';
-import { Heart, Sparkles, Wallet, TrendingUp, PiggyBank, CreditCard, Menu, X, Settings, Target, Loader2, LogOut, GripVertical } from 'lucide-react';
+import { Heart, Sparkles, Wallet, TrendingUp, PiggyBank, CreditCard, Menu, X, Settings, Target, Loader2, LogOut, GripVertical, Volume2, VolumeX } from 'lucide-react';
 import type { Transaction, StockItem, FinancialProduct, LoanItem, BotMessage, Challenge, NetWorthSnapshot } from '@/types';
 
 // Generate yearly data from stored data
@@ -134,6 +135,7 @@ function waGwa(name: string): string {
 
 function App() {
   const { user, isLoading: authLoading, signIn, signOut } = useAuth();
+  const { play, enabled: soundOn, toggle: toggleSound } = useUiSound();
   const userId = user?.id ?? null;
 
   const [selectedYear, setSelectedYear] = useState(() => {
@@ -357,6 +359,13 @@ function App() {
   const processedEditTickRef = useRef(0);
   const markAssetEdited = useCallback(() => setAssetEditTick(t => t + 1), []);
 
+  // 자산을 실제로 고친 순간에만 저장음. 스냅샷 기록과 같은 지점이라 소리가
+  // "기록됐다"는 신호로 정확히 맞아떨어진다.
+  const markAssetEditedWithSound = useCallback(() => {
+    markAssetEdited();
+    play('save');
+  }, [markAssetEdited, play]);
+
   useEffect(() => {
     if (isLoading || !snapshotsReady) return;
     if (assetEditTick === 0 || assetEditTick === processedEditTickRef.current) return;
@@ -567,67 +576,70 @@ function App() {
 
   const handleAddStock = useCallback((stock: Omit<StockItem, 'id'>) => {
     addStock(stock);
-    markAssetEdited();
-  }, [addStock, markAssetEdited]);
+    markAssetEditedWithSound();
+  }, [addStock, markAssetEditedWithSound]);
 
   const handleUpdateStock = useCallback((id: string, updates: Partial<StockItem>) => {
     updateStock(id, updates);
     setEditingStock(null);
-    markAssetEdited();
-  }, [updateStock, markAssetEdited]);
+    markAssetEditedWithSound();
+  }, [updateStock, markAssetEditedWithSound]);
 
   const handleDeleteStock = useCallback((id: string) => {
     if (confirm('정말 삭제하시겠습니까?')) {
       deleteStock(id);
       markAssetEdited();
+      play('delete');
     }
-  }, [deleteStock, markAssetEdited]);
+  }, [deleteStock, markAssetEdited, play]);
 
   const handleAddProduct = useCallback(async (product: Omit<FinancialProduct, 'id'>) => {
     try {
       await addFinancialProduct(product);
-      markAssetEdited();
+      markAssetEditedWithSound();
     } catch (error) {
       const msg = error instanceof Error ? error.message : '자산 추가에 실패했습니다.';
       alert(`❌ 자산 추가 실패\n\n${msg}`);
     }
-  }, [addFinancialProduct, markAssetEdited]);
+  }, [addFinancialProduct, markAssetEditedWithSound]);
 
   const handleUpdateProduct = useCallback((id: string, updates: Partial<FinancialProduct>) => {
     updateFinancialProduct(id, updates);
     setEditingProduct(null);
-    markAssetEdited();
-  }, [updateFinancialProduct, markAssetEdited]);
+    markAssetEditedWithSound();
+  }, [updateFinancialProduct, markAssetEditedWithSound]);
 
   const handleDeleteProduct = useCallback((id: string) => {
     if (confirm('정말 삭제하시겠습니까?')) {
       deleteFinancialProduct(id);
       markAssetEdited();
+      play('delete');
     }
-  }, [deleteFinancialProduct, markAssetEdited]);
+  }, [deleteFinancialProduct, markAssetEdited, play]);
 
   const handleAddLoan = useCallback(async (loan: Omit<LoanItem, 'id'>) => {
     try {
       await addLoan(loan);
-      markAssetEdited();
+      markAssetEditedWithSound();
     } catch (error) {
       const msg = error instanceof Error ? error.message : '대출 추가에 실패했습니다.';
       alert(`❌ 대출 추가 실패\n\n${msg}`);
     }
-  }, [addLoan, markAssetEdited]);
+  }, [addLoan, markAssetEditedWithSound]);
 
   const handleUpdateLoan = useCallback((id: string, updates: Partial<LoanItem>) => {
     updateLoan(id, updates);
     setEditingLoan(null);
-    markAssetEdited();
-  }, [updateLoan, markAssetEdited]);
+    markAssetEditedWithSound();
+  }, [updateLoan, markAssetEditedWithSound]);
 
   const handleDeleteLoan = useCallback((id: string) => {
     if (confirm('정말 삭제하시겠습니까?')) {
       deleteLoan(id);
       markAssetEdited();
+      play('delete');
     }
-  }, [deleteLoan, markAssetEdited]);
+  }, [deleteLoan, markAssetEdited, play]);
 
   const openLoanEdit = (loan: LoanItem) => {
     setEditingLoan(loan);
@@ -731,15 +743,16 @@ function App() {
                 </div>
               </button>
               <div>
-                <h1 className="text-base sm:text-xl font-bold text-gray-900">{profile.coupleName}</h1>
-                <p className="hidden sm:block text-xs text-gray-500">{profile.partner1.name} 💕 {profile.partner2.name}</p>
+                {/* 로고는 제목이 아니라 표식이다. 페이지의 h1은 아래 연도 줄이 가진다. */}
+                <div className="text-base sm:text-xl font-bold text-gray-900">{profile.coupleName}</div>
+                <p className="hidden sm:block text-[12px] text-[color:var(--c-ink-3)]">{profile.partner1.name} 💕 {profile.partner2.name}</p>
               </div>
             </motion.div>
 
             {/* Desktop Actions */}
             <div className="hidden md:flex items-center gap-3">
               <button
-                onClick={() => setIsGoalOpen(true)}
+                onClick={() => { play('open'); setIsGoalOpen(true); }}
                 className="flex items-center gap-2 px-4 py-2 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-700"
               >
                 <Target className="w-4 h-4 text-orange-500" />
@@ -757,7 +770,15 @@ function App() {
                 onMonthChange={setSelectedMonth}
               />
               <button
-                onClick={signOut}
+                onClick={() => { toggleSound(); play('tap'); }}
+                title={soundOn ? '효과음 끄기' : '효과음 켜기'}
+                aria-pressed={soundOn}
+                className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-500 hover:text-gray-900"
+              >
+                {soundOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+              </button>
+              <button
+                onClick={() => { play('close'); signOut(); }}
                 title="로그아웃"
                 className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-500 hover:text-red-500"
               >
@@ -877,11 +898,11 @@ function App() {
                 <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500" />
                 <span className="text-xs sm:text-sm font-medium text-orange-500">상위 15% 부부</span>
               </div>
-              <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">
-                {selectedYear}년, 함께 만드는 자산 🎯
-              </h2>
-              <p className="text-sm sm:text-base text-gray-500">
-                {profile.partner1.name}{waGwa(profile.partner1.name)} {profile.partner2.name}, 연속 {yearlyData.streak}개월 달성 중! 💪
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">
+                {selectedYear}년, 함께 만드는 자산
+              </h1>
+              <p className="text-sm sm:text-base text-[color:var(--c-ink-3)]">
+                {profile.partner1.name}{waGwa(profile.partner1.name)} {profile.partner2.name}, 연속 {yearlyData.streak}개월 달성 중
               </p>
             </motion.div>
 
@@ -891,6 +912,7 @@ function App() {
                 onClick={() => {
                   setEditingTransaction(null);
                   setIsTransactionFormOpen(true);
+                  play('open');
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-700"
                 whileHover={{ scale: 1.02 }}
@@ -904,6 +926,7 @@ function App() {
                 onClick={() => {
                   setEditingStock(null);
                   setIsStockFormOpen(true);
+                  play('open');
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-700"
                 whileHover={{ scale: 1.02 }}
@@ -917,6 +940,7 @@ function App() {
                 onClick={() => {
                   setEditingProduct(null);
                   setIsProductFormOpen(true);
+                  play('open');
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-700"
                 whileHover={{ scale: 1.02 }}
@@ -930,6 +954,7 @@ function App() {
                 onClick={() => {
                   setEditingLoan(null);
                   setIsLoanFormOpen(true);
+                  play('open');
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-700"
                 whileHover={{ scale: 1.02 }}
@@ -1348,7 +1373,7 @@ function FinancialProductsList({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-[28px] p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.04)]"
+      className="surface p-4 sm:p-6"
     >
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <div className="flex items-center gap-2 sm:gap-3">
@@ -1356,7 +1381,7 @@ function FinancialProductsList({
             <PiggyBank className="w-4 h-4 sm:w-5 sm:h-5 text-purple-500" />
           </div>
           <div>
-            <h3 className="text-base sm:text-lg font-semibold text-gray-900">자산 & 금융상품</h3>
+            <h3 className="section-title">자산 & 금융상품</h3>
             <p className="text-xs sm:text-sm text-gray-500">{products.length}개 상품</p>
           </div>
         </div>
