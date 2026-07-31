@@ -4,6 +4,20 @@ import { useInView } from '@/hooks/useInView';
 import { TrendingUp, TrendingDown, Minus, Wallet, Target, PiggyBank } from 'lucide-react';
 import { formatCurrency, calculateGrowthRate } from '@/utils/format';
 
+/**
+ * 아이콘 배경 색조.
+ *
+ * 전에는 아이콘 뒤에 `bg-gradient-to-br ${color} bg-opacity-10`을 깔았는데,
+ * bg-opacity는 그라데이션에 안 걸려서 진한 색이 그대로 칠해졌다. 그 위에
+ * 같은 계열 아이콘(초록 배경 위 초록 아이콘)을 올리니 아이콘이 보이지 않고
+ * 색 블록만 남았다. 연한 색조로 깔아서 아이콘이 드러나게 한다.
+ */
+const TINT: Record<string, string> = {
+  'from-green-400 to-green-600': 'bg-green-100',
+  'from-orange-400 to-orange-600': 'bg-orange-100',
+  'from-purple-400 to-purple-600': 'bg-purple-100',
+};
+
 interface NetWorthBreakdownItem {
   name: string;
   value: number;
@@ -40,6 +54,7 @@ interface CardProps {
 }
 
 function Card({ title, value, previousValue, suffix = '', prefix = '', icon, color, delay, isInView, formatAsCurrency = true }: CardProps) {
+  const tintClass = TINT[color] ?? 'bg-gray-100';
   const displayValue = isInView ? value : 0;
   const { formattedValue } = useCountUp({
     end: displayValue,
@@ -65,7 +80,7 @@ function Card({ title, value, previousValue, suffix = '', prefix = '', icon, col
 
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-3 sm:mb-4">
-          <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-br ${color} bg-opacity-10 flex items-center justify-center`}>
+          <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl ${tintClass} flex items-center justify-center`}>
             {icon}
           </div>
           {previousValue !== undefined && (
@@ -105,6 +120,7 @@ function NetWorthBreakdownCard({
 }) {
   const [hovered, setHovered] = useState(false);
   const displayValue = isInView ? value : 0;
+  const tintClass = TINT[color] ?? 'bg-gray-100';
 
   const growthRate = previousValue ? calculateGrowthRate(value, previousValue) : 0;
   const isPositive = growthRate > 0;
@@ -124,7 +140,7 @@ function NetWorthBreakdownCard({
 
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
-            <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-br ${color} bg-opacity-10 flex items-center justify-center`}>
+            <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl ${tintClass} flex items-center justify-center`}>
               {icon}
             </div>
             {previousValue !== undefined && (
