@@ -11,19 +11,14 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  ReferenceLine,
   Legend,
   Cell,
 } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Pencil, Check, X } from 'lucide-react';
 import type { MonthlyData } from '@/types';
-import { calculateGrowthRate } from '@/utils/format';
 import { useInView } from '@/hooks/useInView';
 
 interface NetWorthChartProps {
   monthlyData: MonthlyData[];
-  chartTargetNetWorth?: number;
-  onUpdateChartTarget?: (value: number) => void;
 }
 
 interface CustomTooltipProps {
@@ -121,56 +116,22 @@ function BarTooltip({ active, payload, label }: BarTooltipProps) {
   return null;
 }
 
-export function NetWorthChart({ monthlyData, chartTargetNetWorth, onUpdateChartTarget }: NetWorthChartProps) {
+export function NetWorthChart({ monthlyData }: NetWorthChartProps) {
   const [ref, isInView] = useInView<HTMLDivElement>({ threshold: 0.2 });
-  const [isEditingTarget, setIsEditingTarget] = useState(false);
-  const [inputValue, setInputValue] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  const openEdit = () => {
-    setInputValue(chartTargetNetWorth ? String(Math.round(chartTargetNetWorth / 10000)) : '');
-    setIsEditingTarget(true);
-    setTimeout(() => inputRef.current?.focus(), 50);
-  };
-
-  const commitEdit = () => {
-    const parsed = parseInt(inputValue.replace(/,/g, ''), 10);
-    if (!isNaN(parsed) && parsed > 0 && onUpdateChartTarget) {
-      onUpdateChartTarget(parsed * 10000);
-    }
-    setIsEditingTarget(false);
-  };
-
-  const cancelEdit = () => setIsEditingTarget(false);
-
-  // Filter out future months (netWorth = 0)
-  const validData = monthlyData.filter(d => d.netWorth > 0);
-  const currentMonth = validData[validData.length - 1];
-  const previousMonth = validData.length > 1 ? validData[validData.length - 2] : null;
-
-  const monthlyGrowth = previousMonth
-    ? calculateGrowthRate(currentMonth.netWorth, previousMonth.netWorth)
-    : 0;
-
-  // Target line = 사용자가 직접 입력한 도달 목표 순자산 (절대값, 억원 단위)
-  const effectiveTarget = chartTargetNetWorth ? chartTargetNetWorth / 100000000 : null;
-
-  // Future months show as null so they don't drop to 0 on the chart
+  // 순자산은 수동 입력 자산 기준이라 월별 이력이 없다 → 12개월 모두 현재 순자산 값
   const chartData = monthlyData.map(d => ({
     ...d,
-    netWorth: d.netWorth > 0 ? d.netWorth / 100000000 : null,
+    netWorth: d.netWorth / 100000000,
   }));
 
-  // Smart Y-axis domain: fit the actual data range + target line, with padding
-  const validChartValues = chartData.filter(d => d.netWorth != null).map(d => d.netWorth as number);
-  const allValues = validChartValues.length > 0
-    ? [...validChartValues, ...(effectiveTarget != null ? [effectiveTarget] : [])]
-    : (effectiveTarget != null ? [effectiveTarget, 0] : [0]);
-  const dataMin = allValues.length > 0 ? Math.min(...allValues) : 0;
-  const dataMax = allValues.length > 0 ? Math.max(...allValues) : 1;
+  // Smart Y-axis domain: fit the actual data range, with padding
+  const chartValues = chartData.map(d => d.netWorth);
+  const dataMin = chartValues.length > 0 ? Math.min(...chartValues) : 0;
+  const dataMax = chartValues.length > 0 ? Math.max(...chartValues) : 1;
   const range = dataMax - dataMin;
-  const padding = range > 0 ? range * 0.2 : Math.max(dataMax * 0.1, 0.1);
-  const yDomainMin = Math.max(0, dataMin - padding);
+  const padding = range > 0 ? range * 0.2 : Math.max(Math.abs(dataMax) * 0.1, 0.1);
+  const yDomainMin = dataMin - padding;
   const yDomainMax = dataMax + padding;
 
   return (
@@ -184,17 +145,8 @@ export function NetWorthChart({ monthlyData, chartTargetNetWorth, onUpdateChartT
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">순자산 성장 추이</h3>
-          <p className="text-sm text-gray-500">1월 ~ 12월 순자산 변화</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <p className="text-xs text-gray-500 mb-1">전월대비</p>
-            <div className={`flex items-center gap-1 ${monthlyGrowth >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-              {monthlyGrowth >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-              <span className="text-sm font-semibold">{Math.abs(monthlyGrowth).toFixed(1)}%</span>
-            </div>
-          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-1">순자산 추이</h3>
+          <p className="text-sm text-gray-500">현재 순자산 (자산 - 대출) 기준</p>
         </div>
       </div>
 
@@ -229,14 +181,6 @@ export function NetWorthChart({ monthlyData, chartTargetNetWorth, onUpdateChartT
               domain={[yDomainMin, yDomainMax]}
             />
             <Tooltip content={<CustomTooltip />} />
-            {effectiveTarget != null && (
-              <ReferenceLine
-                y={effectiveTarget}
-                stroke="#34C759"
-                strokeDasharray="5 5"
-                strokeWidth={2}
-              />
-            )}
             <Area
               type="monotone"
               dataKey="netWorth"
@@ -257,44 +201,6 @@ export function NetWorthChart({ monthlyData, chartTargetNetWorth, onUpdateChartT
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-full bg-blue-500" />
           <span className="text-xs text-gray-500">순자산</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-green-500" style={{ background: 'repeating-linear-gradient(45deg, #34C759, #34C759 2px, transparent 2px, transparent 4px)' }} />
-          {isEditingTarget ? (
-            <div className="flex items-center gap-1">
-              <input
-                ref={inputRef}
-                type="number"
-                value={inputValue}
-                onChange={e => setInputValue(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit(); }}
-                className="w-24 text-xs border border-green-400 rounded-md px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-green-400 tabular-nums"
-                placeholder="만원"
-              />
-              <span className="text-xs text-gray-400">만원</span>
-              <button onClick={commitEdit} className="text-green-500 hover:text-green-600">
-                <Check className="w-3.5 h-3.5" />
-              </button>
-              <button onClick={cancelEdit} className="text-gray-400 hover:text-gray-500">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={openEdit}
-              className="flex items-center gap-1 group"
-              title="도달 목표 순자산 설정"
-            >
-              <span className="text-xs text-gray-500">
-                {chartTargetNetWorth
-                  ? `목표 ${chartTargetNetWorth >= 100000000
-                      ? `${(chartTargetNetWorth / 100000000).toFixed(1)}억`
-                      : `${Math.round(chartTargetNetWorth / 10000)}만원`}`
-                  : '목표 미설정'}
-              </span>
-              <Pencil className="w-3 h-3 text-gray-300 group-hover:text-green-500 transition-colors" />
-            </button>
-          )}
         </div>
       </div>
 

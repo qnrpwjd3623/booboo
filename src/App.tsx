@@ -48,19 +48,11 @@ function generateYearlyData(
     const expense = monthTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
     const savingsRate = income > 0 ? ((income - expense) / income) * 100 : 0;
 
-    let netWorth = startNetWorth;
-    for (let m = 1; m <= month; m++) {
-      const mTransactions = transactions.filter(t => t.year === year && t.month === m);
-      const mIncome = mTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-      const mExpense = mTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-      netWorth += (mIncome - mExpense);
-    }
+    // 순자산 = 수동 입력한 자산(주식 + 금융상품) - 대출 잔액
+    // 월간 가계부(수입/지출)와 시작 순자산은 순자산에 반영하지 않는다 — 트래킹 용도로만 사용
     const stockValue = stocks.reduce((sum, s) => sum + (s.shares * s.currentPrice), 0);
     const productValue = products.reduce((sum, p) => sum + p.currentValue, 0);
-    // 총 자산 = 현금흐름 + 주식 + 금융상품(부동산 포함)
-    netWorth += stockValue + productValue;
-    // 순자산 = 총 자산 - 대출 잔액 (부채 차감)
-    netWorth -= loanDebt;
+    const netWorth = stockValue + productValue - loanDebt;
 
     const targetSavingsRate = monthlyTargets[month] ?? 40;
 
@@ -74,13 +66,12 @@ function generateYearlyData(
       targetSavingsRate,
       targetAchieved: savingsRate >= targetSavingsRate,
       stockValue,
-      cashValue: netWorth - stockValue - productValue + loanDebt, // 현금 = 순자산에서 주식/금융상품 제외
       pensionValue: products.filter(p => p.type === 'pension').reduce((sum, p) => sum + p.currentValue, 0),
       debtValue: loanDebt,
     };
   });
 
-  const currentNetWorth = monthlyData[monthlyData.length - 1]?.netWorth || startNetWorth;
+  const currentNetWorth = monthlyData[monthlyData.length - 1]?.netWorth ?? 0;
   // 연간 목표 달성률: 순수 수입-지출 기반 (주식·금융상품·대출 제외)
   const yearlyIncome = transactions
     .filter(t => t.year === year && t.type === 'income')
@@ -235,7 +226,6 @@ function App() {
     deleteCustomCategory,
     getYearlySettings,
     updateYearlySettings,
-    updateChartTarget,
     updateMonthlyTarget,
     getMonthlyTargets,
     coupleProfile,
@@ -855,7 +845,6 @@ function App() {
                 const nwStocks = realCurrentYearData.stocks.reduce((s, i) => s + i.shares * i.currentPrice, 0);
                 const nwProducts = realCurrentYearData.financialProducts.reduce((s, p) => s + p.currentValue, 0);
                 const nwDebt = realCurrentYearData.loanDebt;
-                const nwCash = realCurrentYearData.currentNetWorth - nwStocks - nwProducts + nwDebt;
                 const stockItems = realCurrentYearData.stocks
                   .filter(i => i.shares * i.currentPrice > 0)
                   .map(i => ({ name: i.name, value: i.shares * i.currentPrice }));
@@ -867,9 +856,8 @@ function App() {
                     currentNetWorth={realCurrentYearData.currentNetWorth}
                     targetNetWorth={yearlyData.targetNetWorth}
                     averageSavingsRate={yearlyData.averageSavingsRate}
-                    previousNetWorth={realCurrentYearData.monthlyData.find(m => m.month === currentMonth - 1)?.netWorth}
                     totalLoan={nwDebt}
-                    netWorthBreakdown={{ cash: nwCash, stocks: nwStocks, products: nwProducts, debt: nwDebt, stockItems, productItems }}
+                    netWorthBreakdown={{ stocks: nwStocks, products: nwProducts, debt: nwDebt, stockItems, productItems }}
                   />
                 );
               })()}
@@ -891,11 +879,7 @@ function App() {
               </div>
 
               <div className="lg:col-span-5">
-                <NetWorthChart
-                  monthlyData={yearlyData.monthlyData}
-                  chartTargetNetWorth={settings.chartTargetNetWorth}
-                  onUpdateChartTarget={(value) => updateChartTarget(selectedYear, value)}
-                />
+                <NetWorthChart monthlyData={yearlyData.monthlyData} />
               </div>
 
               <div className="lg:col-span-4 space-y-4 sm:space-y-6">

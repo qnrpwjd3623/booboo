@@ -110,7 +110,6 @@ export interface MonthlyData {
   targetSavingsRate: number;
   targetAchieved: boolean;
   stockValue: number;
-  cashValue: number;
   pensionValue: number;
   debtValue: number;
 }
