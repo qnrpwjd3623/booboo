@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/services/supabaseClient';
 import type { User } from '@supabase/supabase-js';
-import type { Transaction, StockItem, FinancialProduct, LoanItem, CustomCategory, TransactionType } from '@/types';
+import type { Transaction, StockItem, FinancialProduct, LoanItem, CustomCategory, TransactionType, NetWorthSnapshot } from '@/types';
 
 export interface CoupleProfileDb {
     partner1Name: string;
@@ -231,6 +231,28 @@ function toAppLoan(db: DbLoan): LoanItem {
     };
 }
 
+interface DbNetWorthSnapshot {
+    year: number;
+    month: number;
+    net_worth: number;
+    stocks: number;
+    products: number;
+    debt: number;
+    is_estimated: boolean;
+}
+
+function toAppSnapshot(row: DbNetWorthSnapshot): NetWorthSnapshot {
+    return {
+        year: row.year,
+        month: row.month,
+        netWorth: row.net_worth,
+        stocks: row.stocks,
+        products: row.products,
+        debt: row.debt,
+        isEstimated: row.is_estimated ?? false,
+    };
+}
+
 // ========== Hook ==========
 export function useSupabaseFinanceData(user: User | null) {
     const userId = user?.id ?? null;
@@ -242,6 +264,8 @@ export function useSupabaseFinanceData(user: User | null) {
     const [yearlySettings, setYearlySettings] = useState<Record<number, { targetNetWorth: number; startNetWorth: number; monthlyTargets?: Record<number, number>; chartTargetNetWorth?: number }>>({});
     const [coupleProfile, setCoupleProfile] = useState<CoupleProfileDb>(DEFAULT_PROFILE);
     const [fpOrder, setFpOrder] = useState<string[]>([]);
+    const [netWorthSnapshots, setNetWorthSnapshots] = useState<NetWorthSnapshot[]>([]);
+    const [snapshotsReady, setSnapshotsReady] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
 
     // ========== 초기 데이터 로드 ==========
@@ -255,6 +279,8 @@ export function useSupabaseFinanceData(user: User | null) {
             setYearlySettings({});
             setCoupleProfile(DEFAULT_PROFILE);
             setFpOrder([]);
+            setNetWorthSnapshots([]);
+            setSnapshotsReady(false);
             setIsLoading(false);
             return;
         }
@@ -368,6 +394,7 @@ export function useSupabaseFinanceData(user: User | null) {
                 loadLoans(),
                 loadCustomCategories(),
                 loadCoupleProfile(),
+                loadNetWorthSnapshots(),
             ]);
         } catch (error) {
             console.error('Failed to load data:', error);
@@ -395,6 +422,66 @@ export function useSupabaseFinanceData(user: User | null) {
         }));
         setCustomCategories(cats);
     };
+
+    const loadNetWorthSnapshots = async () => {
+        if (!userId) return;
+        const { data, error } = await supabase
+            .from('net_worth_snapshots')
+            .select('*')
+            .eq('user_id', userId)
+            .order('year', { ascending: true })
+            .order('month', { ascending: true });
+        if (error) {
+            // 마이그레이션 실행 전이면 테이블이 없다 — 조용히 무시하고 기능만 꺼둔다
+            if (!error.message?.includes('does not exist') && error.code !== 'PGRST116' && error.code !== '42P01') {
+                console.error('Load net worth snapshots error:', error);
+            }
+            setSnapshotsReady(false);
+            return;
+        }
+        setNetWorthSnapshots((data || []).map(toAppSnapshot));
+        setSnapshotsReady(true);
+    };
+
+    // 여러 달치를 한 번에 upsert (과거 역산 채우기 + 이번 달 기록 공용)
+    const saveNetWorthSnapshots = useCallback(async (rows: NetWorthSnapshot[]) => {
+        if (!userId || rows.length === 0) return;
+        const payload = rows.map(r => ({
+            user_id: userId,
+            year: r.year,
+            month: r.month,
+            net_worth: Math.round(r.netWorth),
+            stocks: Math.round(r.stocks),
+            products: Math.round(r.products),
+            debt: Math.round(r.debt),
+            is_estimated: r.isEstimated,
+            updated_at: new Date().toISOString(),
+        }));
+        const { error } = await supabase
+            .from('net_worth_snapshots')
+            .upsert(payload, { onConflict: 'user_id,year,month' });
+        if (error) {
+            console.error('Save net worth snapshots error:', error.message, error.code);
+            return;
+        }
+        setNetWorthSnapshots(prev => {
+            const merged = new Map(prev.map(s => [`${s.year}-${s.month}`, s]));
+            rows.forEach(r => merged.set(`${r.year}-${r.month}`, r));
+            return Array.from(merged.values()).sort((a, b) => a.year - b.year || a.month - b.month);
+        });
+    }, [userId]);
+
+    const deleteNetWorthSnapshot = useCallback(async (year: number, month: number) => {
+        if (!userId) return;
+        const { error } = await supabase
+            .from('net_worth_snapshots')
+            .delete()
+            .eq('user_id', userId)
+            .eq('year', year)
+            .eq('month', month);
+        if (error) { console.error('Delete net worth snapshot error:', error); return; }
+        setNetWorthSnapshots(prev => prev.filter(s => !(s.year === year && s.month === month)));
+    }, [userId]);
 
     const loadTransactions = async () => {
         if (!userId) return;
@@ -1014,6 +1101,12 @@ export function useSupabaseFinanceData(user: User | null) {
         addCustomCategory,
         updateCustomCategory,
         deleteCustomCategory,
+
+        // 월별 순자산 스냅샷
+        netWorthSnapshots,
+        snapshotsReady,
+        saveNetWorthSnapshots,
+        deleteNetWorthSnapshot,
 
         // Couple profile
         coupleProfile,

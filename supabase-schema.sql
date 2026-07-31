@@ -163,6 +163,24 @@ create table if not exists ai_comments (
 alter table ai_comments add column if not exists user_id uuid;
 create unique index if not exists idx_ai_comments_user_month_type on ai_comments(user_id, year, month, type, name);
 
+-- 9. 월별 순자산 스냅샷 (자산 수정 시점의 연/월 기준으로 저장)
+create table if not exists net_worth_snapshots (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid not null,
+  year int not null,
+  month int not null,
+  net_worth bigint not null default 0,
+  stocks bigint not null default 0,
+  products bigint not null default 0,
+  debt bigint not null default 0,
+  is_estimated boolean not null default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create unique index if not exists idx_net_worth_snapshots_user_year_month
+  on net_worth_snapshots(user_id, year, month);
+
 -- 인덱스
 create index if not exists idx_transactions_user_year_month on transactions(user_id, year, month);
 create index if not exists idx_stocks_user_ticker on stocks(user_id, ticker);
@@ -178,6 +196,7 @@ alter table yearly_settings enable row level security;
 alter table loans enable row level security;
 alter table custom_categories enable row level security;
 alter table ai_comments enable row level security;
+alter table net_worth_snapshots enable row level security;
 
 drop policy if exists "couple_profiles_user_access" on couple_profiles;
 create policy "couple_profiles_user_access" on couple_profiles
@@ -223,6 +242,12 @@ create policy "custom_categories_user_access" on custom_categories
 
 drop policy if exists "ai_comments_user_access" on ai_comments;
 create policy "ai_comments_user_access" on ai_comments
+  for all to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+drop policy if exists "net_worth_snapshots_user_access" on net_worth_snapshots;
+create policy "net_worth_snapshots_user_access" on net_worth_snapshots
   for all to authenticated
   using (user_id = auth.uid())
   with check (user_id = auth.uid());

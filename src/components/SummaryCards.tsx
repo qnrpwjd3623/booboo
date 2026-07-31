@@ -10,7 +10,6 @@ interface NetWorthBreakdownItem {
 }
 
 interface NetWorthBreakdown {
-  cash: number;
   stocks: number;
   products: number;
   debt: number;

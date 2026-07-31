@@ -99,6 +99,17 @@ export interface LoanItem {
   gracePeriodMonths: number;   // 거치 기간 (개월), hasGracePeriod가 true일 때만 의미 있음
 }
 
+// 월별 순자산 스냅샷 (자산을 수정한 시점의 연/월에 기록)
+export interface NetWorthSnapshot {
+  year: number;
+  month: number;
+  netWorth: number;
+  stocks: number;
+  products: number;
+  debt: number;
+  isEstimated: boolean; // true = 과거 역산으로 채운 추정치
+}
+
 // 월별 데이터
 export interface MonthlyData {
   month: number;
@@ -110,9 +121,10 @@ export interface MonthlyData {
   targetSavingsRate: number;
   targetAchieved: boolean;
   stockValue: number;
-  cashValue: number;
   pensionValue: number;
   debtValue: number;
+  hasSnapshot: boolean;    // 이 달의 순자산 기록이 있는지 (없으면 차트에서 선을 끊는다)
+  isEstimated: boolean;    // 역산 추정치 여부
 }
 
 // 챌린지

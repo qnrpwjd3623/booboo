@@ -25,7 +25,7 @@ import { supabase } from '@/services/supabaseClient';
 import { fetchMultipleStockPrices } from '@/services/stockApi';
 import { getFinancialAdvice, getMonthlyChallenge, type FinancialContext } from '@/services/aiApi';
 import { Heart, Sparkles, Wallet, TrendingUp, PiggyBank, CreditCard, Menu, X, Settings, Target, Loader2, LogOut, GripVertical } from 'lucide-react';
-import type { Transaction, StockItem, FinancialProduct, LoanItem, BotMessage, Challenge } from '@/types';
+import type { Transaction, StockItem, FinancialProduct, LoanItem, BotMessage, Challenge, NetWorthSnapshot } from '@/types';
 
 // Generate yearly data from stored data
 function generateYearlyData(
@@ -36,10 +36,20 @@ function generateYearlyData(
   loans: LoanItem[],
   targetNetWorth: number,
   startNetWorth: number,
-  monthlyTargets: Record<number, number>
+  monthlyTargets: Record<number, number>,
+  snapshots: NetWorthSnapshot[] = []
 ) {
   // 대출 잔액 (부채) - 순자산에서 차감
   const loanDebt = loans.reduce((sum, l) => sum + l.remainingPrincipal, 0);
+
+  // 현재 순자산 = 수동 입력한 자산(주식 + 금융상품) - 대출 잔액
+  // 월간 가계부(수입/지출)와 시작 순자산은 순자산에 반영하지 않는다 — 트래킹 용도로만 사용
+  const stockValue = stocks.reduce((sum, s) => sum + (s.shares * s.currentPrice), 0);
+  const productValue = products.reduce((sum, p) => sum + p.currentValue, 0);
+  const liveNetWorth = stockValue + productValue - loanDebt;
+
+  // 월별 순자산은 스냅샷(자산을 수정한 달에 기록된 값)에서 읽는다
+  const snapshotByMonth = new Map(snapshots.filter(s => s.year === year).map(s => [s.month, s]));
 
   const monthlyData = Array.from({ length: 12 }, (_, i) => {
     const month = i + 1;
@@ -48,39 +58,28 @@ function generateYearlyData(
     const expense = monthTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
     const savingsRate = income > 0 ? ((income - expense) / income) * 100 : 0;
 
-    let netWorth = startNetWorth;
-    for (let m = 1; m <= month; m++) {
-      const mTransactions = transactions.filter(t => t.year === year && t.month === m);
-      const mIncome = mTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-      const mExpense = mTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-      netWorth += (mIncome - mExpense);
-    }
-    const stockValue = stocks.reduce((sum, s) => sum + (s.shares * s.currentPrice), 0);
-    const productValue = products.reduce((sum, p) => sum + p.currentValue, 0);
-    // 총 자산 = 현금흐름 + 주식 + 금융상품(부동산 포함)
-    netWorth += stockValue + productValue;
-    // 순자산 = 총 자산 - 대출 잔액 (부채 차감)
-    netWorth -= loanDebt;
-
+    const snapshot = snapshotByMonth.get(month);
     const targetSavingsRate = monthlyTargets[month] ?? 40;
 
     return {
       month,
       monthName: `${month}월`,
-      netWorth,
+      netWorth: snapshot?.netWorth ?? 0,
+      hasSnapshot: snapshot != null,
+      isEstimated: snapshot?.isEstimated ?? false,
       income,
       expense,
       savingsRate,
       targetSavingsRate,
       targetAchieved: savingsRate >= targetSavingsRate,
-      stockValue,
-      cashValue: netWorth - stockValue - productValue + loanDebt, // 현금 = 순자산에서 주식/금융상품 제외
+      stockValue: snapshot?.stocks ?? stockValue,
       pensionValue: products.filter(p => p.type === 'pension').reduce((sum, p) => sum + p.currentValue, 0),
-      debtValue: loanDebt,
+      debtValue: snapshot?.debt ?? loanDebt,
     };
   });
 
-  const currentNetWorth = monthlyData[monthlyData.length - 1]?.netWorth || startNetWorth;
+  // 카드에 표시하는 "현재 순자산"은 스냅샷이 아니라 지금 입력돼 있는 자산 기준
+  const currentNetWorth = liveNetWorth;
   // 연간 목표 달성률: 순수 수입-지출 기반 (주식·금융상품·대출 제외)
   const yearlyIncome = transactions
     .filter(t => t.year === year && t.type === 'income')
@@ -235,9 +234,11 @@ function App() {
     deleteCustomCategory,
     getYearlySettings,
     updateYearlySettings,
-    updateChartTarget,
     updateMonthlyTarget,
     getMonthlyTargets,
+    netWorthSnapshots,
+    snapshotsReady,
+    saveNetWorthSnapshots,
     coupleProfile,
     updateCoupleProfile,
     fpOrder,
@@ -268,6 +269,36 @@ function App() {
   const rawMonthlyTargets = getMonthlyTargets(selectedYear);
   const monthlyTargets = rawMonthlyTargets;
 
+  const realCurrentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+  const monthsLeft = 12 - currentMonth;
+
+  // 지금 입력돼 있는 자산 기준 순자산 구성
+  const liveNetWorth = useMemo(() => {
+    const stocksValue = stocks.reduce((s, i) => s + i.shares * i.currentPrice, 0);
+    const productsValue = financialProducts.reduce((s, p) => s + p.currentValue, 0);
+    const debt = loans.reduce((s, l) => s + l.remainingPrincipal, 0);
+    return {
+      stocks: stocksValue,
+      products: productsValue,
+      debt,
+      netWorth: stocksValue + productsValue - debt,
+    };
+  }, [stocks, financialProducts, loans]);
+
+  const hasAnyAsset = stocks.length > 0 || financialProducts.length > 0 || loans.length > 0;
+
+  // 이번 달 기록이 아직 저장되기 전(또는 마이그레이션 전)이어도 차트가 비지 않도록 메모리상으로 채워준다
+  const effectiveSnapshots = useMemo(() => {
+    if (!hasAnyAsset) return netWorthSnapshots;
+    const hasThisMonth = netWorthSnapshots.some(s => s.year === realCurrentYear && s.month === currentMonth);
+    if (hasThisMonth) return netWorthSnapshots;
+    return [
+      ...netWorthSnapshots,
+      { year: realCurrentYear, month: currentMonth, ...liveNetWorth, isEstimated: false },
+    ];
+  }, [netWorthSnapshots, hasAnyAsset, realCurrentYear, currentMonth, liveNetWorth]);
+
   const yearlyData = useMemo(() => {
     // 이전 연도 이월: startNetWorth가 0(미설정)이면 이전 연도 말 현금 잔액을 자동 적용
     let effectiveStartNetWorth = settings.startNetWorth;
@@ -294,12 +325,12 @@ function App() {
       loans,
       settings.targetNetWorth,
       effectiveStartNetWorth,
-      monthlyTargets
+      monthlyTargets,
+      effectiveSnapshots
     );
-  }, [selectedYear, transactions, stocks, financialProducts, loans, settings, monthlyTargets, getYearlySettings]);
+  }, [selectedYear, transactions, stocks, financialProducts, loans, settings, monthlyTargets, getYearlySettings, effectiveSnapshots]);
 
   // 실제 현재 연도 순자산 — selectedYear와 무관하게 항상 올해 기준 계산 (기기 간 동일 표시 보장)
-  const realCurrentYear = new Date().getFullYear();
   const realCurrentYearData = useMemo(() => {
     const realSettings = getYearlySettings(realCurrentYear);
     let effectiveStart = realSettings.startNetWorth;
@@ -311,16 +342,68 @@ function App() {
       const prevCashEnd = prevSettings.startNetWorth + prevIncome - prevExpense;
       if (prevCashEnd > 0) effectiveStart = prevCashEnd;
     }
-    return generateYearlyData(realCurrentYear, transactions, stocks, financialProducts, loans, realSettings.targetNetWorth, effectiveStart, {});
-  }, [realCurrentYear, transactions, stocks, financialProducts, loans, getYearlySettings]);
+    return generateYearlyData(realCurrentYear, transactions, stocks, financialProducts, loans, realSettings.targetNetWorth, effectiveStart, {}, effectiveSnapshots);
+  }, [realCurrentYear, transactions, stocks, financialProducts, loans, getYearlySettings, effectiveSnapshots]);
 
   // 선택 연도 localStorage 저장 (새로고침/재로그인 시 복원)
   useEffect(() => {
     localStorage.setItem('booboo_selected_year', String(selectedYear));
   }, [selectedYear]);
 
-  const currentMonth = new Date().getMonth() + 1;
-  const monthsLeft = 12 - currentMonth;
+  // 사용자가 자산을 직접 수정했을 때만 그 시점(오늘)의 연/월 스냅샷을 기록한다.
+  // 주식 시세 자동 갱신만으로는 기록하지 않는다 — 그 달 값은 마지막으로 직접 고친 시점 기준.
+  // 한 달에 여러 번 고치면 같은 행을 덮어써서 마지막 값이 그 달의 순자산이 된다.
+  const [assetEditTick, setAssetEditTick] = useState(0);
+  const processedEditTickRef = useRef(0);
+  const markAssetEdited = useCallback(() => setAssetEditTick(t => t + 1), []);
+
+  useEffect(() => {
+    if (isLoading || !snapshotsReady) return;
+    if (assetEditTick === 0 || assetEditTick === processedEditTickRef.current) return;
+    // 수정 직후에는 DB 반영과 목록 갱신이 잇달아 일어나므로 값이 안정된 뒤 한 번만 저장
+    const timer = setTimeout(() => {
+      processedEditTickRef.current = assetEditTick;
+      saveNetWorthSnapshots([{
+        year: realCurrentYear,
+        month: currentMonth,
+        ...liveNetWorth,
+        isEstimated: false,
+      }]);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [assetEditTick, isLoading, snapshotsReady, liveNetWorth, realCurrentYear, currentMonth, saveNetWorthSnapshots]);
+
+  // 과거 달 역산 백필 (최초 1회)
+  // 자산의 과거 이력이 없으므로, 현재 순자산에서 그 달의 저축(수입-지출)을 거꾸로 빼며 추정한다.
+  const backfilledRef = useRef(false);
+  useEffect(() => {
+    if (isLoading || !snapshotsReady || !hasAnyAsset || backfilledRef.current) return;
+    backfilledRef.current = true;
+
+    const estimates: NetWorthSnapshot[] = [];
+    let anchor = liveNetWorth.netWorth; // 이번 달 값에서 출발
+    for (let m = currentMonth - 1; m >= 1; m--) {
+      const existing = netWorthSnapshots.find(s => s.year === realCurrentYear && s.month === m);
+      if (existing) {
+        anchor = existing.netWorth; // 실제 기록이 있으면 그걸 새 기준점으로
+        continue;
+      }
+      const nextMonthTxns = transactions.filter(t => t.year === realCurrentYear && t.month === m + 1);
+      const income = nextMonthTxns.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+      const expense = nextMonthTxns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+      anchor = Math.max(0, anchor - (income - expense));
+      estimates.push({
+        year: realCurrentYear,
+        month: m,
+        netWorth: anchor,
+        stocks: 0,
+        products: 0,
+        debt: 0,
+        isEstimated: true,
+      });
+    }
+    if (estimates.length > 0) saveNetWorthSnapshots(estimates);
+  }, [isLoading, snapshotsReady, hasAnyAsset, netWorthSnapshots, transactions, liveNetWorth, realCurrentYear, currentMonth, saveNetWorthSnapshots]);
 
   // 주식 가격 자동 업데이트
   useEffect(() => {
@@ -484,58 +567,67 @@ function App() {
 
   const handleAddStock = useCallback((stock: Omit<StockItem, 'id'>) => {
     addStock(stock);
-  }, [addStock]);
+    markAssetEdited();
+  }, [addStock, markAssetEdited]);
 
   const handleUpdateStock = useCallback((id: string, updates: Partial<StockItem>) => {
     updateStock(id, updates);
     setEditingStock(null);
-  }, [updateStock]);
+    markAssetEdited();
+  }, [updateStock, markAssetEdited]);
 
   const handleDeleteStock = useCallback((id: string) => {
     if (confirm('정말 삭제하시겠습니까?')) {
       deleteStock(id);
+      markAssetEdited();
     }
-  }, [deleteStock]);
+  }, [deleteStock, markAssetEdited]);
 
   const handleAddProduct = useCallback(async (product: Omit<FinancialProduct, 'id'>) => {
     try {
       await addFinancialProduct(product);
+      markAssetEdited();
     } catch (error) {
       const msg = error instanceof Error ? error.message : '자산 추가에 실패했습니다.';
       alert(`❌ 자산 추가 실패\n\n${msg}`);
     }
-  }, [addFinancialProduct]);
+  }, [addFinancialProduct, markAssetEdited]);
 
   const handleUpdateProduct = useCallback((id: string, updates: Partial<FinancialProduct>) => {
     updateFinancialProduct(id, updates);
     setEditingProduct(null);
-  }, [updateFinancialProduct]);
+    markAssetEdited();
+  }, [updateFinancialProduct, markAssetEdited]);
 
   const handleDeleteProduct = useCallback((id: string) => {
     if (confirm('정말 삭제하시겠습니까?')) {
       deleteFinancialProduct(id);
+      markAssetEdited();
     }
-  }, [deleteFinancialProduct]);
+  }, [deleteFinancialProduct, markAssetEdited]);
 
   const handleAddLoan = useCallback(async (loan: Omit<LoanItem, 'id'>) => {
     try {
       await addLoan(loan);
+      markAssetEdited();
     } catch (error) {
       const msg = error instanceof Error ? error.message : '대출 추가에 실패했습니다.';
       alert(`❌ 대출 추가 실패\n\n${msg}`);
     }
-  }, [addLoan]);
+  }, [addLoan, markAssetEdited]);
 
   const handleUpdateLoan = useCallback((id: string, updates: Partial<LoanItem>) => {
     updateLoan(id, updates);
     setEditingLoan(null);
-  }, [updateLoan]);
+    markAssetEdited();
+  }, [updateLoan, markAssetEdited]);
 
   const handleDeleteLoan = useCallback((id: string) => {
     if (confirm('정말 삭제하시겠습니까?')) {
       deleteLoan(id);
+      markAssetEdited();
     }
-  }, [deleteLoan]);
+  }, [deleteLoan, markAssetEdited]);
 
   const openLoanEdit = (loan: LoanItem) => {
     setEditingLoan(loan);
@@ -855,7 +947,6 @@ function App() {
                 const nwStocks = realCurrentYearData.stocks.reduce((s, i) => s + i.shares * i.currentPrice, 0);
                 const nwProducts = realCurrentYearData.financialProducts.reduce((s, p) => s + p.currentValue, 0);
                 const nwDebt = realCurrentYearData.loanDebt;
-                const nwCash = realCurrentYearData.currentNetWorth - nwStocks - nwProducts + nwDebt;
                 const stockItems = realCurrentYearData.stocks
                   .filter(i => i.shares * i.currentPrice > 0)
                   .map(i => ({ name: i.name, value: i.shares * i.currentPrice }));
@@ -867,9 +958,8 @@ function App() {
                     currentNetWorth={realCurrentYearData.currentNetWorth}
                     targetNetWorth={yearlyData.targetNetWorth}
                     averageSavingsRate={yearlyData.averageSavingsRate}
-                    previousNetWorth={realCurrentYearData.monthlyData.find(m => m.month === currentMonth - 1)?.netWorth}
                     totalLoan={nwDebt}
-                    netWorthBreakdown={{ cash: nwCash, stocks: nwStocks, products: nwProducts, debt: nwDebt, stockItems, productItems }}
+                    netWorthBreakdown={{ stocks: nwStocks, products: nwProducts, debt: nwDebt, stockItems, productItems }}
                   />
                 );
               })()}
@@ -891,11 +981,7 @@ function App() {
               </div>
 
               <div className="lg:col-span-5">
-                <NetWorthChart
-                  monthlyData={yearlyData.monthlyData}
-                  chartTargetNetWorth={settings.chartTargetNetWorth}
-                  onUpdateChartTarget={(value) => updateChartTarget(selectedYear, value)}
-                />
+                <NetWorthChart monthlyData={yearlyData.monthlyData} />
               </div>
 
               <div className="lg:col-span-4 space-y-4 sm:space-y-6">
