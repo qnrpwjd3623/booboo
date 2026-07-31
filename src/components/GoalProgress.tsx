@@ -53,9 +53,9 @@ export function GoalProgress({
       initial={{ opacity: 0, y: 20 }}
       animate={isInView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.6 }}
-      className="bg-white rounded-[28px] p-6 shadow-[0_4px_24px_rgba(0,0,0,0.04)] h-full"
+      className="surface p-6"
     >
-      <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
+      <h3 className="section-title mb-6 flex items-center gap-2">
         <Target className="w-5 h-5 text-blue-500" />
         연간 목표 달성률
       </h3>

@@ -149,13 +149,13 @@ export function NetWorthChart({ monthlyData }: NetWorthChartProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={isInView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.6, delay: 0.2 }}
-      className="bg-white rounded-[28px] p-6 shadow-[0_4px_24px_rgba(0,0,0,0.04)] h-full"
+      className="surface-primary p-6 sm:p-8"
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">순자산 추이</h3>
-          <p className="text-sm text-gray-500">1월 ~ 12월 순자산 변화</p>
+          <h2 className="workspace-title mb-1">순자산 추이</h2>
+          <p className="section-sub">1월 ~ 12월 순자산 변화</p>
         </div>
         {previous && (
           <div className="text-right">
@@ -228,7 +228,7 @@ export function NetWorthChart({ monthlyData }: NetWorthChartProps) {
 
       {/* 월별 수입/지출 바 차트 */}
       <div>
-        <h4 className="text-sm font-semibold text-gray-700 mb-1">월별 수입 / 지출</h4>
+        <h3 className="section-title mb-1">월별 수입 / 지출</h3>
         <p className="text-xs text-gray-400 mb-4">1월 ~ 12월 수입·지출 현황</p>
         <div className="h-[220px]">
           <ResponsiveContainer width="100%" height="100%">

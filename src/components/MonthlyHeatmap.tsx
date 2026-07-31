@@ -92,9 +92,9 @@ export function MonthlyHeatmap({ year, monthlyData, monthlyTargets, onUpdateTarg
       initial={{ opacity: 0, y: 20 }}
       animate={isInView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.6, delay: 0.4 }}
-      className="bg-white rounded-[28px] p-6 shadow-[0_4px_24px_rgba(0,0,0,0.04)]"
+      className="surface p-6"
     >
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">월별 달성 현황</h3>
+      <h3 className="section-title mb-4">월별 달성 현황</h3>
 
       <div className="grid grid-cols-4 gap-3">
         {monthlyData.map((data, index) => {

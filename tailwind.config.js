@@ -4,7 +4,28 @@ module.exports = {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      fontFamily: {
+        sans: [
+          "'Pretendard Variable'",
+          "Pretendard",
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "'Apple SD Gothic Neo'",
+          "'Malgun Gothic'",
+          "system-ui",
+          "sans-serif",
+        ],
+      },
       colors: {
+        ink: {
+          DEFAULT: "var(--c-ink)",
+          2: "var(--c-ink-2)",
+          3: "var(--c-ink-3)",
+        },
+        gain: "var(--c-gain)",
+        loss: "var(--c-loss)",
+        line: "var(--c-line)",
+        canvas: "var(--c-canvas)",
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

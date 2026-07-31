@@ -56,8 +56,8 @@ function Card({ title, value, previousValue, suffix = '', prefix = '', icon, col
 
   return (
     <div
-      className="group relative bg-white rounded-[24px] p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.04)]
-                 hover:shadow-[0_12px_40px_rgba(0,0,0,0.12)] hover:-translate-y-1
+      className="group relative surface p-4 sm:p-6
+                 hover:border-[color:var(--c-accent)]/30
                  transition-all duration-500 ease-out cursor-pointer overflow-hidden"
     >
       {/* Background gradient on hover */}
@@ -117,8 +117,8 @@ function NetWorthBreakdownCard({
       onMouseLeave={() => setHovered(false)}
     >
       {/* Main card — same style as Card */}
-      <div className="group relative bg-white rounded-[24px] p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.04)]
-                      hover:shadow-[0_12px_40px_rgba(0,0,0,0.12)] hover:-translate-y-1
+      <div className="group relative surface p-4 sm:p-6
+                      hover:border-[color:var(--c-accent)]/30
                       transition-all duration-500 ease-out cursor-pointer overflow-hidden">
         <div className={`absolute inset-0 bg-gradient-to-br ${color} opacity-0 group-hover:opacity-5 transition-opacity duration-500`} />
 

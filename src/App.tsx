@@ -19,12 +19,14 @@ import { LoanList } from '@/components/LoanList';
 import { GoalSettingForm } from '@/components/GoalSettingForm';
 import { CoupleProfileSettings, type CoupleProfile } from '@/components/CoupleProfile';
 import { LoginPage } from '@/components/LoginPage';
+import { IntroSplash } from '@/components/IntroSplash';
+import { useUiSound } from '@/hooks/useUiSound';
 import { useSupabaseFinanceData } from '@/hooks/useSupabaseFinanceData';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/services/supabaseClient';
 import { fetchMultipleStockPrices } from '@/services/stockApi';
 import { getFinancialAdvice, getMonthlyChallenge, type FinancialContext } from '@/services/aiApi';
-import { Heart, Sparkles, Wallet, TrendingUp, PiggyBank, CreditCard, Menu, X, Settings, Target, Loader2, LogOut, GripVertical } from 'lucide-react';
+import { Heart, Sparkles, Wallet, TrendingUp, PiggyBank, CreditCard, Menu, X, Settings, Target, Loader2, LogOut, GripVertical, Volume2, VolumeX } from 'lucide-react';
 import type { Transaction, StockItem, FinancialProduct, LoanItem, BotMessage, Challenge, NetWorthSnapshot } from '@/types';
 
 // Generate yearly data from stored data
@@ -134,6 +136,16 @@ function waGwa(name: string): string {
 
 function App() {
   const { user, isLoading: authLoading, signIn, signOut } = useAuth();
+  const { play, enabled: soundOn, toggle: toggleSound } = useUiSound();
+
+  // 인트로는 로그인한 브라우저 세션당 한 번만. 새로고침마다 다시 보면 금방 질린다.
+  const [showIntro, setShowIntro] = useState(() =>
+    typeof window !== 'undefined' && sessionStorage.getItem('booboo_intro_seen') !== '1'
+  );
+  const dismissIntro = useCallback(() => {
+    sessionStorage.setItem('booboo_intro_seen', '1');
+    setShowIntro(false);
+  }, []);
   const userId = user?.id ?? null;
 
   const [selectedYear, setSelectedYear] = useState(() => {
@@ -357,6 +369,13 @@ function App() {
   const processedEditTickRef = useRef(0);
   const markAssetEdited = useCallback(() => setAssetEditTick(t => t + 1), []);
 
+  // 자산을 실제로 고친 순간에만 저장음. 스냅샷 기록과 같은 지점이라 소리가
+  // "기록됐다"는 신호로 정확히 맞아떨어진다.
+  const markAssetEditedWithSound = useCallback(() => {
+    markAssetEdited();
+    play('save');
+  }, [markAssetEdited, play]);
+
   useEffect(() => {
     if (isLoading || !snapshotsReady) return;
     if (assetEditTick === 0 || assetEditTick === processedEditTickRef.current) return;
@@ -567,67 +586,70 @@ function App() {
 
   const handleAddStock = useCallback((stock: Omit<StockItem, 'id'>) => {
     addStock(stock);
-    markAssetEdited();
-  }, [addStock, markAssetEdited]);
+    markAssetEditedWithSound();
+  }, [addStock, markAssetEditedWithSound]);
 
   const handleUpdateStock = useCallback((id: string, updates: Partial<StockItem>) => {
     updateStock(id, updates);
     setEditingStock(null);
-    markAssetEdited();
-  }, [updateStock, markAssetEdited]);
+    markAssetEditedWithSound();
+  }, [updateStock, markAssetEditedWithSound]);
 
   const handleDeleteStock = useCallback((id: string) => {
     if (confirm('정말 삭제하시겠습니까?')) {
       deleteStock(id);
       markAssetEdited();
+      play('delete');
     }
-  }, [deleteStock, markAssetEdited]);
+  }, [deleteStock, markAssetEdited, play]);
 
   const handleAddProduct = useCallback(async (product: Omit<FinancialProduct, 'id'>) => {
     try {
       await addFinancialProduct(product);
-      markAssetEdited();
+      markAssetEditedWithSound();
     } catch (error) {
       const msg = error instanceof Error ? error.message : '자산 추가에 실패했습니다.';
       alert(`❌ 자산 추가 실패\n\n${msg}`);
     }
-  }, [addFinancialProduct, markAssetEdited]);
+  }, [addFinancialProduct, markAssetEditedWithSound]);
 
   const handleUpdateProduct = useCallback((id: string, updates: Partial<FinancialProduct>) => {
     updateFinancialProduct(id, updates);
     setEditingProduct(null);
-    markAssetEdited();
-  }, [updateFinancialProduct, markAssetEdited]);
+    markAssetEditedWithSound();
+  }, [updateFinancialProduct, markAssetEditedWithSound]);
 
   const handleDeleteProduct = useCallback((id: string) => {
     if (confirm('정말 삭제하시겠습니까?')) {
       deleteFinancialProduct(id);
       markAssetEdited();
+      play('delete');
     }
-  }, [deleteFinancialProduct, markAssetEdited]);
+  }, [deleteFinancialProduct, markAssetEdited, play]);
 
   const handleAddLoan = useCallback(async (loan: Omit<LoanItem, 'id'>) => {
     try {
       await addLoan(loan);
-      markAssetEdited();
+      markAssetEditedWithSound();
     } catch (error) {
       const msg = error instanceof Error ? error.message : '대출 추가에 실패했습니다.';
       alert(`❌ 대출 추가 실패\n\n${msg}`);
     }
-  }, [addLoan, markAssetEdited]);
+  }, [addLoan, markAssetEditedWithSound]);
 
   const handleUpdateLoan = useCallback((id: string, updates: Partial<LoanItem>) => {
     updateLoan(id, updates);
     setEditingLoan(null);
-    markAssetEdited();
-  }, [updateLoan, markAssetEdited]);
+    markAssetEditedWithSound();
+  }, [updateLoan, markAssetEditedWithSound]);
 
   const handleDeleteLoan = useCallback((id: string) => {
     if (confirm('정말 삭제하시겠습니까?')) {
       deleteLoan(id);
       markAssetEdited();
+      play('delete');
     }
-  }, [deleteLoan, markAssetEdited]);
+  }, [deleteLoan, markAssetEdited, play]);
 
   const openLoanEdit = (loan: LoanItem) => {
     setEditingLoan(loan);
@@ -695,6 +717,14 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[#F5F5F7]">
+      {showIntro && (
+        <IntroSplash
+          word={profile.coupleName}
+          caption={`${profile.partner1.name} · ${profile.partner2.name}`}
+          onDone={dismissIntro}
+        />
+      )}
+
       {/* Header */}
       <header className="sticky top-0 z-40 bg-[#F5F5F7]/80 backdrop-blur-xl border-b border-gray-200/50">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
@@ -731,8 +761,9 @@ function App() {
                 </div>
               </button>
               <div>
-                <h1 className="text-base sm:text-xl font-bold text-gray-900">{profile.coupleName}</h1>
-                <p className="hidden sm:block text-xs text-gray-500">{profile.partner1.name} 💕 {profile.partner2.name}</p>
+                {/* 로고는 제목이 아니라 표식이다. 페이지의 h1은 아래 연도 줄이 가진다. */}
+                <div className="text-base sm:text-xl font-bold text-gray-900">{profile.coupleName}</div>
+                <p className="hidden sm:block text-[12px] text-[color:var(--c-ink-3)]">{profile.partner1.name} 💕 {profile.partner2.name}</p>
               </div>
             </motion.div>
 
@@ -756,6 +787,14 @@ function App() {
                 selectedMonth={selectedMonth}
                 onMonthChange={setSelectedMonth}
               />
+              <button
+                onClick={() => { toggleSound(); play('tap'); }}
+                title={soundOn ? '효과음 끄기' : '효과음 켜기'}
+                aria-pressed={soundOn}
+                className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-500 hover:text-gray-900"
+              >
+                {soundOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+              </button>
               <button
                 onClick={signOut}
                 title="로그아웃"
@@ -877,11 +916,11 @@ function App() {
                 <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500" />
                 <span className="text-xs sm:text-sm font-medium text-orange-500">상위 15% 부부</span>
               </div>
-              <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">
-                {selectedYear}년, 함께 만드는 자산 🎯
-              </h2>
-              <p className="text-sm sm:text-base text-gray-500">
-                {profile.partner1.name}{waGwa(profile.partner1.name)} {profile.partner2.name}, 연속 {yearlyData.streak}개월 달성 중! 💪
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">
+                {selectedYear}년, 함께 만드는 자산
+              </h1>
+              <p className="text-sm sm:text-base text-[color:var(--c-ink-3)]">
+                {profile.partner1.name}{waGwa(profile.partner1.name)} {profile.partner2.name}, 연속 {yearlyData.streak}개월 달성 중
               </p>
             </motion.div>
 
@@ -891,6 +930,7 @@ function App() {
                 onClick={() => {
                   setEditingTransaction(null);
                   setIsTransactionFormOpen(true);
+                  play('open');
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-700"
                 whileHover={{ scale: 1.02 }}
@@ -904,6 +944,7 @@ function App() {
                 onClick={() => {
                   setEditingStock(null);
                   setIsStockFormOpen(true);
+                  play('open');
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-700"
                 whileHover={{ scale: 1.02 }}
@@ -917,6 +958,7 @@ function App() {
                 onClick={() => {
                   setEditingProduct(null);
                   setIsProductFormOpen(true);
+                  play('open');
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-700"
                 whileHover={{ scale: 1.02 }}
@@ -930,6 +972,7 @@ function App() {
                 onClick={() => {
                   setEditingLoan(null);
                   setIsLoanFormOpen(true);
+                  play('open');
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-sm font-medium text-gray-700"
                 whileHover={{ scale: 1.02 }}
@@ -965,41 +1008,40 @@ function App() {
               })()}
             </div>
 
-            {/* Main Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
-              <div className="lg:col-span-3">
-                <GoalProgress
-                  currentAmount={yearlyData.currentAmount}
-                  targetAmount={yearlyData.targetAmount}
-                  streak={yearlyData.streak}
-                  challenge={challengeWithProgress}
-                  prevMonthAmount={challengeWithProgress?.prevMonthAmount ?? 0}
-                  thisMonthAmount={challengeWithProgress?.thisMonthAmount ?? 0}
-                  monthsLeft={monthsLeft}
-                  isLoadingChallenge={isLoadingChallenge}
-                />
-              </div>
+            {/* 주 작업 영역 — 순자산 추이가 이 화면의 주인공이라 전폭으로 둔다.
+                예전에는 12칼럼 중 5칼럼만 쓰면서 양옆 칼럼보다 훨씬 길어져
+                좌우에 500px 가까운 빈 공간을 만들었다. */}
+            <div className="mb-4 sm:mb-6">
+              <NetWorthChart monthlyData={yearlyData.monthlyData} />
+            </div>
 
-              <div className="lg:col-span-5">
-                <NetWorthChart monthlyData={yearlyData.monthlyData} />
-              </div>
-
-              <div className="lg:col-span-4 space-y-4 sm:space-y-6">
-                <MonthlyHeatmap
-                  year={selectedYear}
-                  monthlyData={yearlyData.monthlyData}
-                  monthlyTargets={monthlyTargets}
-                  onUpdateTarget={(month, target) => updateMonthlyTarget(selectedYear, month, target)}
-                />
-                <BotCard
-                  messages={botMessage ? [botMessage] : []}
-                  progress={yearlyData.targetAmount > 0 ? (yearlyData.currentAmount / yearlyData.targetAmount) * 100 : 0}
-                  streak={yearlyData.streak}
-                  monthsLeft={monthsLeft}
-                  onRefresh={handleRefreshAdvice}
-                  isLoading={isLoadingAdvice}
-                />
-              </div>
+            {/* 보조 영역 — 높이가 비슷한 것끼리 3등분.
+                items-start로 짧은 카드가 긴 카드 높이에 맞춰 늘어나지 않게 한다. */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 items-start">
+              <GoalProgress
+                currentAmount={yearlyData.currentAmount}
+                targetAmount={yearlyData.targetAmount}
+                streak={yearlyData.streak}
+                challenge={challengeWithProgress}
+                prevMonthAmount={challengeWithProgress?.prevMonthAmount ?? 0}
+                thisMonthAmount={challengeWithProgress?.thisMonthAmount ?? 0}
+                monthsLeft={monthsLeft}
+                isLoadingChallenge={isLoadingChallenge}
+              />
+              <MonthlyHeatmap
+                year={selectedYear}
+                monthlyData={yearlyData.monthlyData}
+                monthlyTargets={monthlyTargets}
+                onUpdateTarget={(month, target) => updateMonthlyTarget(selectedYear, month, target)}
+              />
+              <BotCard
+                messages={botMessage ? [botMessage] : []}
+                progress={yearlyData.targetAmount > 0 ? (yearlyData.currentAmount / yearlyData.targetAmount) * 100 : 0}
+                streak={yearlyData.streak}
+                monthsLeft={monthsLeft}
+                onRefresh={handleRefreshAdvice}
+                isLoading={isLoadingAdvice}
+              />
             </div>
 
             {/* Stock Portfolio */}
@@ -1018,7 +1060,7 @@ function App() {
 
             {/* 자산 & 금융상품 + 대출 현황 — 2열 그리드 (lg 이상) */}
             {(financialProducts.length > 0 || loans.length > 0) && (
-              <div className={`mt-6 sm:mt-8 ${financialProducts.length > 0 && loans.length > 0 ? 'grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6' : ''}`}>
+              <div className={`mt-6 sm:mt-8 ${financialProducts.length > 0 && loans.length > 0 ? 'grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start' : ''}`}>
                 {financialProducts.length > 0 && (
                   <FinancialProductsList
                     products={financialProducts}
@@ -1348,7 +1390,7 @@ function FinancialProductsList({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-[28px] p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.04)]"
+      className="surface p-4 sm:p-6"
     >
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <div className="flex items-center gap-2 sm:gap-3">
@@ -1356,7 +1398,7 @@ function FinancialProductsList({
             <PiggyBank className="w-4 h-4 sm:w-5 sm:h-5 text-purple-500" />
           </div>
           <div>
-            <h3 className="text-base sm:text-lg font-semibold text-gray-900">자산 & 금융상품</h3>
+            <h3 className="section-title">자산 & 금융상품</h3>
             <p className="text-xs sm:text-sm text-gray-500">{products.length}개 상품</p>
           </div>
         </div>

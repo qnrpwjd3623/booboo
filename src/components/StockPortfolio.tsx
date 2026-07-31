@@ -24,7 +24,7 @@ export function StockPortfolio({ stocks, onEdit, onDelete }: StockPortfolioProps
       initial={{ opacity: 0, y: 20 }}
       animate={isInView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.6 }}
-      className="bg-white rounded-[28px] p-4 sm:p-6 shadow-[0_4px_24px_rgba(0,0,0,0.04)]"
+      className="surface p-4 sm:p-6"
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-4 sm:mb-6">
@@ -33,7 +33,7 @@ export function StockPortfolio({ stocks, onEdit, onDelete }: StockPortfolioProps
             <Package className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
           </div>
           <div>
-            <h3 className="text-base sm:text-lg font-semibold text-gray-900">주식 포트폴리오</h3>
+            <h3 className="section-title">주식 포트폴리오</h3>
             <p className="text-xs sm:text-sm text-gray-500">{stocks.length}개 종목</p>
           </div>
         </div>
