@@ -65,9 +65,6 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
       <p className="text-xl font-bold text-gray-900 mb-1 tabular-nums tracking-tight">
         {displayValue.toLocaleString('ko-KR')}원
       </p>
-      {data.isEstimated && (
-        <p className="text-[11px] text-gray-400 mb-2">기록 없음 · 가계부로 역산한 추정치</p>
-      )}
       <div className="flex items-center gap-2 text-sm">
         <span className="text-gray-500">저축률:</span>
         <span className={`font-medium ${data.savingsRate >= 40 ? 'text-green-500' : 'text-orange-500'}`}>
@@ -121,13 +118,6 @@ function BarTooltip({ active, payload, label }: BarTooltipProps) {
   return null;
 }
 
-// 역산 추정치인 달만 회색 점으로 표시 (실제 기록된 달은 점 없음)
-function EstimateDot(props: { cx?: number; cy?: number; payload?: { isEstimated?: boolean } }) {
-  const { cx, cy, payload } = props;
-  if (cx == null || cy == null || !payload?.isEstimated) return null;
-  return <circle cx={cx} cy={cy} r={3.5} fill="#C7C7CC" stroke="#fff" strokeWidth={1.5} />;
-}
-
 export function NetWorthChart({ monthlyData }: NetWorthChartProps) {
   const [ref, isInView] = useInView<HTMLDivElement>({ threshold: 0.2 });
 
@@ -143,7 +133,6 @@ export function NetWorthChart({ monthlyData }: NetWorthChartProps) {
   const monthlyGrowth = latest && previous && previous.netWorth > 0
     ? calculateGrowthRate(latest.netWorth, previous.netWorth)
     : 0;
-  const hasEstimates = recorded.some(d => d.isEstimated);
 
   // Smart Y-axis domain: fit the actual data range, with padding
   const chartValues = chartData.filter(d => d.netWorth != null).map(d => d.netWorth as number);
@@ -166,9 +155,7 @@ export function NetWorthChart({ monthlyData }: NetWorthChartProps) {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-1">순자산 추이</h3>
-          <p className="text-sm text-gray-500">
-            자산을 수정한 달에 기록된 순자산{hasEstimates && ' · 회색 점은 추정치'}
-          </p>
+          <p className="text-sm text-gray-500">1월 ~ 12월 순자산 변화</p>
         </div>
         {previous && (
           <div className="text-right">
@@ -221,7 +208,7 @@ export function NetWorthChart({ monthlyData }: NetWorthChartProps) {
               animationDuration={2000}
               animationBegin={300}
               connectNulls={false}
-              dot={<EstimateDot />}
+              dot={false}
               activeDot={{ r: 8, fill: '#007AFF', stroke: '#fff', strokeWidth: 3 }}
             />
           </AreaChart>

@@ -350,29 +350,28 @@ function App() {
     localStorage.setItem('booboo_selected_year', String(selectedYear));
   }, [selectedYear]);
 
-  // 자산을 수정하면 그 시점(오늘)의 연/월 스냅샷을 기록한다.
+  // 사용자가 자산을 직접 수정했을 때만 그 시점(오늘)의 연/월 스냅샷을 기록한다.
+  // 주식 시세 자동 갱신만으로는 기록하지 않는다 — 그 달 값은 마지막으로 직접 고친 시점 기준.
   // 한 달에 여러 번 고치면 같은 행을 덮어써서 마지막 값이 그 달의 순자산이 된다.
+  const [assetEditTick, setAssetEditTick] = useState(0);
+  const processedEditTickRef = useRef(0);
+  const markAssetEdited = useCallback(() => setAssetEditTick(t => t + 1), []);
+
   useEffect(() => {
-    if (isLoading || !snapshotsReady || !hasAnyAsset) return;
-    const existing = netWorthSnapshots.find(s => s.year === realCurrentYear && s.month === currentMonth);
-    const unchanged = existing
-      && !existing.isEstimated
-      && existing.netWorth === liveNetWorth.netWorth
-      && existing.stocks === liveNetWorth.stocks
-      && existing.products === liveNetWorth.products
-      && existing.debt === liveNetWorth.debt;
-    if (unchanged) return;
-    // 주식 시세 자동 갱신이 연달아 들어오므로 잠시 모았다가 한 번만 저장
+    if (isLoading || !snapshotsReady) return;
+    if (assetEditTick === 0 || assetEditTick === processedEditTickRef.current) return;
+    // 수정 직후에는 DB 반영과 목록 갱신이 잇달아 일어나므로 값이 안정된 뒤 한 번만 저장
     const timer = setTimeout(() => {
+      processedEditTickRef.current = assetEditTick;
       saveNetWorthSnapshots([{
         year: realCurrentYear,
         month: currentMonth,
         ...liveNetWorth,
         isEstimated: false,
       }]);
-    }, 2000);
+    }, 1500);
     return () => clearTimeout(timer);
-  }, [isLoading, snapshotsReady, hasAnyAsset, netWorthSnapshots, liveNetWorth, realCurrentYear, currentMonth, saveNetWorthSnapshots]);
+  }, [assetEditTick, isLoading, snapshotsReady, liveNetWorth, realCurrentYear, currentMonth, saveNetWorthSnapshots]);
 
   // 과거 달 역산 백필 (최초 1회)
   // 자산의 과거 이력이 없으므로, 현재 순자산에서 그 달의 저축(수입-지출)을 거꾸로 빼며 추정한다.
@@ -568,58 +567,67 @@ function App() {
 
   const handleAddStock = useCallback((stock: Omit<StockItem, 'id'>) => {
     addStock(stock);
-  }, [addStock]);
+    markAssetEdited();
+  }, [addStock, markAssetEdited]);
 
   const handleUpdateStock = useCallback((id: string, updates: Partial<StockItem>) => {
     updateStock(id, updates);
     setEditingStock(null);
-  }, [updateStock]);
+    markAssetEdited();
+  }, [updateStock, markAssetEdited]);
 
   const handleDeleteStock = useCallback((id: string) => {
     if (confirm('정말 삭제하시겠습니까?')) {
       deleteStock(id);
+      markAssetEdited();
     }
-  }, [deleteStock]);
+  }, [deleteStock, markAssetEdited]);
 
   const handleAddProduct = useCallback(async (product: Omit<FinancialProduct, 'id'>) => {
     try {
       await addFinancialProduct(product);
+      markAssetEdited();
     } catch (error) {
       const msg = error instanceof Error ? error.message : '자산 추가에 실패했습니다.';
       alert(`❌ 자산 추가 실패\n\n${msg}`);
     }
-  }, [addFinancialProduct]);
+  }, [addFinancialProduct, markAssetEdited]);
 
   const handleUpdateProduct = useCallback((id: string, updates: Partial<FinancialProduct>) => {
     updateFinancialProduct(id, updates);
     setEditingProduct(null);
-  }, [updateFinancialProduct]);
+    markAssetEdited();
+  }, [updateFinancialProduct, markAssetEdited]);
 
   const handleDeleteProduct = useCallback((id: string) => {
     if (confirm('정말 삭제하시겠습니까?')) {
       deleteFinancialProduct(id);
+      markAssetEdited();
     }
-  }, [deleteFinancialProduct]);
+  }, [deleteFinancialProduct, markAssetEdited]);
 
   const handleAddLoan = useCallback(async (loan: Omit<LoanItem, 'id'>) => {
     try {
       await addLoan(loan);
+      markAssetEdited();
     } catch (error) {
       const msg = error instanceof Error ? error.message : '대출 추가에 실패했습니다.';
       alert(`❌ 대출 추가 실패\n\n${msg}`);
     }
-  }, [addLoan]);
+  }, [addLoan, markAssetEdited]);
 
   const handleUpdateLoan = useCallback((id: string, updates: Partial<LoanItem>) => {
     updateLoan(id, updates);
     setEditingLoan(null);
-  }, [updateLoan]);
+    markAssetEdited();
+  }, [updateLoan, markAssetEdited]);
 
   const handleDeleteLoan = useCallback((id: string) => {
     if (confirm('정말 삭제하시겠습니까?')) {
       deleteLoan(id);
+      markAssetEdited();
     }
-  }, [deleteLoan]);
+  }, [deleteLoan, markAssetEdited]);
 
   const openLoanEdit = (loan: LoanItem) => {
     setEditingLoan(loan);
