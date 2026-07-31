@@ -1,51 +1,42 @@
-import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { CircularProgress } from './CircularProgress';
-import { Flame, Loader2, Target, TrendingDown } from 'lucide-react';
+import { Flame, Target, Gauge } from 'lucide-react';
 import { formatCurrency } from '@/utils/format';
-import type { Challenge } from '@/types';
 import { useInView } from '@/hooks/useInView';
 
 interface GoalProgressProps {
   currentAmount: number;
   targetAmount: number;
   streak: number;
-  challenge: (Challenge & { prevMonthAmount?: number; thisMonthAmount?: number }) | null;
-  prevMonthAmount: number;
-  thisMonthAmount: number;
   monthsLeft: number;
-  isLoadingChallenge?: boolean;
+  /** 최근 완료된 달들의 (수입 − 지출) 평균. 남은 달 속도 추정에 쓴다. */
+  recentAvgSaving: number;
 }
 
 export function GoalProgress({
   currentAmount,
   targetAmount,
   streak,
-  challenge,
-  prevMonthAmount,
-  thisMonthAmount,
   monthsLeft,
-  isLoadingChallenge = false,
+  recentAvgSaving,
 }: GoalProgressProps) {
   const [ref, isInView] = useInView<HTMLDivElement>({ threshold: 0.2 });
-  const [showTooltip, setShowTooltip] = useState(false);
-  const percentage = Math.min((currentAmount / targetAmount) * 100, 100);
-  const remainingAmount = Math.max(targetAmount - currentAmount, 0);
 
-  // 진행률 계산
-  const progressPct = challenge && challenge.targetReduction > 0
-    ? Math.min((challenge.currentReduction / challenge.targetReduction) * 100, 100)
+  // 목표가 0이면 나눗셈이 Infinity가 되므로 막는다
+  const safeTarget = targetAmount > 0 ? targetAmount : 0;
+  const percentage = safeTarget > 0
+    ? Math.max(0, Math.min((currentAmount / safeTarget) * 100, 100))
     : 0;
+  const remainingAmount = Math.max(safeTarget - currentAmount, 0);
 
-  // 절감액
-  const savedAmount = prevMonthAmount > 0 ? Math.max(0, prevMonthAmount - thisMonthAmount) : 0;
-
-  // 진행률에 따른 색상
-  const barColor = progressPct >= 100
-    ? 'from-green-400 to-emerald-500'
-    : progressPct >= 50
-    ? 'from-blue-400 to-purple-500'
-    : 'from-orange-300 to-orange-400';
+  // 남은 기간에 매달 필요한 금액 vs 실제로 내고 있는 속도
+  const requiredPerMonth = monthsLeft > 0 ? Math.round(remainingAmount / monthsLeft) : 0;
+  const projectedYearEnd = Math.round(currentAmount + recentAvgSaving * monthsLeft);
+  const projectedPct = safeTarget > 0
+    ? Math.max(0, Math.round((projectedYearEnd / safeTarget) * 100))
+    : 0;
+  const onTrack = projectedYearEnd >= safeTarget;
+  const shortfallPerMonth = Math.max(0, Math.round(requiredPerMonth - recentAvgSaving));
 
   return (
     <motion.div
@@ -123,98 +114,52 @@ export function GoalProgress({
         </div>
       </motion.div>
 
-      {/* Challenge */}
+      {/* 페이스 — 목표까지 월 얼마씩 모아야 하는지, 지금 속도면 어디에 닿는지.
+          퍼센트 하나만 있으면 "그래서 지금 잘하고 있나"를 알 수 없다. */}
       <motion.div
-        className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-4"
+        className="rounded-2xl p-4 border"
+        style={{ borderColor: 'var(--c-line)' }}
         initial={{ opacity: 0, x: -20 }}
         animate={isInView ? { opacity: 1, x: 0 } : {}}
         transition={{ delay: 0.8 }}
       >
-        {/* 헤더 */}
-        <div className="flex items-center gap-2 mb-2">
-          <TrendingDown className="w-4 h-4 text-blue-500" />
-          <p className="text-sm font-medium text-gray-900">이번 달 챌린지</p>
-          {isLoadingChallenge && <Loader2 className="w-3.5 h-3.5 text-blue-400 animate-spin ml-auto" />}
+        <div className="flex items-center gap-2 mb-3">
+          <Gauge className="w-4 h-4 text-[color:var(--c-accent)]" />
+          <p className="text-sm font-medium text-gray-900">이 페이스로 가면</p>
         </div>
 
-        {challenge ? (
+        {monthsLeft > 0 ? (
           <>
-            {/* 제목 + 카테고리 뱃지 */}
-            <div className="flex items-start gap-2 mb-3">
-              <span className="flex-shrink-0 px-2 py-0.5 bg-blue-100 text-blue-600 rounded-full text-[10px] font-semibold mt-0.5">
-                {challenge.category}
+            <div className="flex items-baseline justify-between mb-1.5">
+              <span className="text-xs text-[color:var(--c-ink-3)]">남은 {monthsLeft}개월, 매달</span>
+              <span className="text-sm font-semibold text-gray-900 tabular-nums">
+                {formatCurrency(requiredPerMonth)}
               </span>
-              <p className="text-xs text-gray-600 leading-relaxed">{challenge.title}</p>
+            </div>
+            <div className="flex items-baseline justify-between mb-3">
+              <span className="text-xs text-[color:var(--c-ink-3)]">최근 3개월 평균</span>
+              <span className={`text-sm font-semibold tabular-nums ${onTrack ? 'text-[color:var(--c-gain)]' : 'text-[color:var(--c-ink-2)]'}`}>
+                {formatCurrency(recentAvgSaving)}
+              </span>
             </div>
 
-            {/* 프로그레스바 + 툴팁 */}
-            <div
-              className="relative"
-              onMouseEnter={() => setShowTooltip(true)}
-              onMouseLeave={() => setShowTooltip(false)}
-            >
-              {/* 툴팁 */}
-              {showTooltip && (
-                <div className="absolute bottom-full left-0 right-0 mb-2 z-10">
-                  <div className="bg-gray-900 text-white text-xs rounded-xl p-3 shadow-lg">
-                    <div className="flex justify-between items-center mb-1.5">
-                      <span className="text-gray-400">지난달 {challenge.category} 지출</span>
-                      <span className="font-semibold text-orange-300">
-                        {prevMonthAmount > 0 ? `${prevMonthAmount.toLocaleString()}원` : '데이터 없음'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center mb-1.5">
-                      <span className="text-gray-400">이번달 {challenge.category} 지출</span>
-                      <span className="font-semibold text-blue-300">
-                        {thisMonthAmount > 0 ? `${thisMonthAmount.toLocaleString()}원` : '아직 없음'}
-                      </span>
-                    </div>
-                    {prevMonthAmount > 0 && (
-                      <div className="flex justify-between items-center pt-1.5 border-t border-gray-700">
-                        <span className="text-gray-400">절감액</span>
-                        <span className={`font-bold ${savedAmount >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {savedAmount >= 0 ? '+' : ''}{savedAmount.toLocaleString()}원
-                        </span>
-                      </div>
-                    )}
-                    {/* 말풍선 꼬리 */}
-                    <div className="absolute bottom-[-5px] left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-gray-900 rotate-45" />
-                  </div>
-                </div>
-              )}
-
-              {/* 바 */}
-              <div className="h-3 bg-white/60 rounded-full overflow-hidden">
-                <motion.div
-                  className={`h-full bg-gradient-to-r ${barColor} rounded-full`}
-                  initial={{ width: 0 }}
-                  animate={isInView ? { width: `${progressPct}%` } : {}}
-                  transition={{ duration: 1, delay: 1 }}
-                />
+            <div className="pt-3 border-t" style={{ borderColor: 'var(--c-line)' }}>
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs text-[color:var(--c-ink-3)]">연말 예상</span>
+                <span className="text-sm font-bold text-gray-900 tabular-nums">
+                  {formatCurrency(projectedYearEnd)}
+                </span>
               </div>
-
-              {/* 수치 */}
-              <div className="flex justify-between mt-1.5">
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] text-gray-500">현재</span>
-                  <span className={`text-[11px] font-semibold ${challenge.currentReduction >= challenge.targetReduction ? 'text-green-500' : 'text-blue-500'}`}>
-                    {challenge.currentReduction}% 절감
-                  </span>
-                </div>
-                <span className="text-[11px] text-gray-400">목표 {challenge.targetReduction}%</span>
-              </div>
-            </div>
-
-            {/* 달성 여부 */}
-            {challenge.currentReduction >= challenge.targetReduction && (
-              <p className="text-xs text-green-600 font-medium text-center mt-2">
-                🎉 챌린지 달성! 대단해!
+              <p className={`text-[11px] mt-1 font-medium ${onTrack ? 'text-[color:var(--c-gain)]' : 'text-[color:var(--c-warn)]'}`}>
+                {onTrack
+                  ? `목표의 ${projectedPct}% — 이대로면 달성`
+                  : `목표의 ${projectedPct}% — 매달 ${formatCurrency(shortfallPerMonth)} 더 필요`}
               </p>
-            )}
+            </div>
           </>
         ) : (
-          <p className="text-xs text-gray-400 text-center py-2">
-            {isLoadingChallenge ? 'AI가 이번 달 챌린지를 만들고 있어요... 🤖' : '챌린지를 불러오는 중...'}
+          <p className="text-xs text-[color:var(--c-ink-3)] py-1">
+            올해가 끝났습니다. 최종 {formatCurrency(currentAmount)} 저축.
           </p>
         )}
       </motion.div>
