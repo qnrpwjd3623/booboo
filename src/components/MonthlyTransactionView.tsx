@@ -33,6 +33,7 @@ interface MonthlyTransactionViewProps {
   onDeleteTransaction: (id: string) => void;
   onBatchAddTransactions: (txns: Omit<Transaction, 'id'>[]) => Promise<void>;
   netWorthSnapshot?: NetWorthSnapshot;
+  isNetWorthClosed: boolean;
   monthlyClosePreview: MonthlyClosePreview;
   isCurrentMonth: boolean;
   onCloseMonth: () => Promise<void>;
@@ -56,6 +57,7 @@ export function MonthlyTransactionView({
   onDeleteTransaction,
   onBatchAddTransactions,
   netWorthSnapshot,
+  isNetWorthClosed,
   monthlyClosePreview,
   isCurrentMonth,
   onCloseMonth,
@@ -261,6 +263,7 @@ export function MonthlyTransactionView({
             year={year}
             month={month}
             snapshot={netWorthSnapshot}
+            isClosed={isNetWorthClosed}
             preview={monthlyClosePreview}
             isCurrentMonth={isCurrentMonth}
             onConfirm={onCloseMonth}
