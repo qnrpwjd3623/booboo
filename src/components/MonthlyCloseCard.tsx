@@ -77,11 +77,7 @@ export function MonthlyCloseCard({
           <button
             type="button"
             onClick={() => setIsOpen(true)}
-            className={`flex flex-shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
-              isClosed
-                ? 'text-gray-500 hover:bg-gray-100 hover:text-gray-800'
-                : 'border border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-800'
-            }`}
+            className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50 hover:text-gray-800"
           >
             {!isClosed && <CalendarDays className="h-3.5 w-3.5" />}
             {isClosed ? '내역 보기' : `${month}월 자산 마감`}
