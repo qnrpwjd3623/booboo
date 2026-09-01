@@ -12,6 +12,7 @@ import { YearSelector } from '@/components/YearSelector';
 import { MonthSelector } from '@/components/MonthSelector';
 import { TransactionForm } from '@/components/TransactionForm';
 import { MonthlyTransactionView } from '@/components/MonthlyTransactionView';
+import type { MonthlyClosePreview } from '@/components/MonthlyCloseCard';
 import { StockForm } from '@/components/StockForm';
 import { FinancialProductForm } from '@/components/FinancialProductForm';
 import { LoanForm } from '@/components/LoanForm';
@@ -289,17 +290,6 @@ function App() {
 
   const hasAnyAsset = stocks.length > 0 || financialProducts.length > 0 || loans.length > 0;
 
-  // 이번 달 기록이 아직 저장되기 전(또는 마이그레이션 전)이어도 차트가 비지 않도록 메모리상으로 채워준다
-  const effectiveSnapshots = useMemo(() => {
-    if (!hasAnyAsset) return netWorthSnapshots;
-    const hasThisMonth = netWorthSnapshots.some(s => s.year === realCurrentYear && s.month === currentMonth);
-    if (hasThisMonth) return netWorthSnapshots;
-    return [
-      ...netWorthSnapshots,
-      { year: realCurrentYear, month: currentMonth, ...liveNetWorth, isEstimated: false },
-    ];
-  }, [netWorthSnapshots, hasAnyAsset, realCurrentYear, currentMonth, liveNetWorth]);
-
   const yearlyData = useMemo(() => {
     // 이전 연도 이월: startNetWorth가 0(미설정)이면 이전 연도 말 현금 잔액을 자동 적용
     let effectiveStartNetWorth = settings.startNetWorth;
@@ -327,9 +317,9 @@ function App() {
       settings.targetNetWorth,
       effectiveStartNetWorth,
       monthlyTargets,
-      effectiveSnapshots
+      netWorthSnapshots
     );
-  }, [selectedYear, transactions, stocks, financialProducts, loans, settings, monthlyTargets, getYearlySettings, effectiveSnapshots]);
+  }, [selectedYear, transactions, stocks, financialProducts, loans, settings, monthlyTargets, getYearlySettings, netWorthSnapshots]);
 
   // 실제 현재 연도 순자산 — selectedYear와 무관하게 항상 올해 기준 계산 (기기 간 동일 표시 보장)
   const realCurrentYearData = useMemo(() => {
@@ -343,8 +333,8 @@ function App() {
       const prevCashEnd = prevSettings.startNetWorth + prevIncome - prevExpense;
       if (prevCashEnd > 0) effectiveStart = prevCashEnd;
     }
-    return generateYearlyData(realCurrentYear, transactions, stocks, financialProducts, loans, realSettings.targetNetWorth, effectiveStart, {}, effectiveSnapshots);
-  }, [realCurrentYear, transactions, stocks, financialProducts, loans, getYearlySettings, effectiveSnapshots]);
+    return generateYearlyData(realCurrentYear, transactions, stocks, financialProducts, loans, realSettings.targetNetWorth, effectiveStart, {}, netWorthSnapshots);
+  }, [realCurrentYear, transactions, stocks, financialProducts, loans, getYearlySettings, netWorthSnapshots]);
 
   // 최근 완료된 달 최대 3개의 (수입 − 지출) 평균. 진행 중인 이번 달은 지출이
   // 아직 다 들어오지 않았으므로 빼야 속도가 과대평가되지 않는다.
@@ -360,36 +350,6 @@ function App() {
   useEffect(() => {
     localStorage.setItem('booboo_selected_year', String(selectedYear));
   }, [selectedYear]);
-
-  // 사용자가 자산을 직접 수정했을 때만 그 시점(오늘)의 연/월 스냅샷을 기록한다.
-  // 주식 시세 자동 갱신만으로는 기록하지 않는다 — 그 달 값은 마지막으로 직접 고친 시점 기준.
-  // 한 달에 여러 번 고치면 같은 행을 덮어써서 마지막 값이 그 달의 순자산이 된다.
-  const [assetEditTick, setAssetEditTick] = useState(0);
-  const processedEditTickRef = useRef(0);
-  const markAssetEdited = useCallback(() => setAssetEditTick(t => t + 1), []);
-
-  // 자산을 실제로 고친 순간에만 저장음. 스냅샷 기록과 같은 지점이라 소리가
-  // "기록됐다"는 신호로 정확히 맞아떨어진다.
-  const markAssetEditedWithSound = useCallback(() => {
-    markAssetEdited();
-    play('save');
-  }, [markAssetEdited, play]);
-
-  useEffect(() => {
-    if (isLoading || !snapshotsReady) return;
-    if (assetEditTick === 0 || assetEditTick === processedEditTickRef.current) return;
-    // 수정 직후에는 DB 반영과 목록 갱신이 잇달아 일어나므로 값이 안정된 뒤 한 번만 저장
-    const timer = setTimeout(() => {
-      processedEditTickRef.current = assetEditTick;
-      saveNetWorthSnapshots([{
-        year: realCurrentYear,
-        month: currentMonth,
-        ...liveNetWorth,
-        isEstimated: false,
-      }]);
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [assetEditTick, isLoading, snapshotsReady, liveNetWorth, realCurrentYear, currentMonth, saveNetWorthSnapshots]);
 
   // 과거 달 역산 백필 (최초 1회)
   // 자산의 과거 이력이 없으므로, 현재 순자산에서 그 달의 저축(수입-지출)을 거꾸로 빼며 추정한다.
@@ -523,6 +483,68 @@ function App() {
   // 생성 함수 자체(services/aiApi.getMonthlyChallenge)와 ai_comments 테이블은
   // 그대로 두었다. 카테고리 매칭과 같은 기간 비교를 제대로 고치면 되살릴 수 있다.
 
+  const monthlyCloseContext = useMemo(() => {
+    if (selectedMonth === null) return null;
+
+    const monthTransactions = transactions.filter(
+      transaction => transaction.year === selectedYear && transaction.month === selectedMonth,
+    );
+    const income = monthTransactions
+      .filter(transaction => transaction.type === 'income')
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+    const expense = monthTransactions
+      .filter(transaction => transaction.type === 'expense')
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+    const savings = income - expense;
+
+    const snapshot = netWorthSnapshots.find(
+      item => item.year === selectedYear && item.month === selectedMonth,
+    );
+    const selectedKey = selectedYear * 100 + selectedMonth;
+    const previousSnapshot = [...netWorthSnapshots]
+      .filter(item => !item.isEstimated && item.year * 100 + item.month < selectedKey)
+      .sort((a, b) => b.year - a.year || b.month - a.month)[0];
+
+    const currentAssetNetWorth = liveNetWorth.stocks + liveNetWorth.products - liveNetWorth.debt;
+    const previousAssetNetWorth = previousSnapshot
+      ? previousSnapshot.stocks + previousSnapshot.products - previousSnapshot.debt
+      : currentAssetNetWorth;
+    const assetChange = previousSnapshot ? currentAssetNetWorth - previousAssetNetWorth : 0;
+    const netWorth = previousSnapshot
+      ? previousSnapshot.netWorth + savings + assetChange
+      : currentAssetNetWorth;
+    const cash = netWorth - liveNetWorth.stocks - liveNetWorth.products + liveNetWorth.debt;
+
+    const preview: MonthlyClosePreview = {
+      previousNetWorth: previousSnapshot?.netWorth ?? null,
+      income,
+      expense,
+      savings,
+      assetChange,
+      cash,
+      stocks: liveNetWorth.stocks,
+      products: liveNetWorth.products,
+      debt: liveNetWorth.debt,
+      netWorth,
+    };
+
+    return { snapshot, preview };
+  }, [selectedMonth, selectedYear, transactions, netWorthSnapshots, liveNetWorth]);
+
+  const handleCloseMonth = useCallback(async () => {
+    if (selectedMonth === null || !monthlyCloseContext) return;
+    await saveNetWorthSnapshots([{
+      year: selectedYear,
+      month: selectedMonth,
+      netWorth: monthlyCloseContext.preview.netWorth,
+      stocks: monthlyCloseContext.preview.stocks,
+      products: monthlyCloseContext.preview.products,
+      debt: monthlyCloseContext.preview.debt,
+      isEstimated: false,
+    }]);
+    play('save');
+  }, [selectedMonth, selectedYear, monthlyCloseContext, saveNetWorthSnapshots, play]);
+
   const handleAddTransaction = useCallback((transaction: Omit<Transaction, 'id'>) => {
     addTransaction(transaction);
   }, [addTransaction]);
@@ -542,70 +564,67 @@ function App() {
 
   const handleAddStock = useCallback((stock: Omit<StockItem, 'id'>) => {
     addStock(stock);
-    markAssetEditedWithSound();
-  }, [addStock, markAssetEditedWithSound]);
+    play('save');
+  }, [addStock, play]);
 
   const handleUpdateStock = useCallback((id: string, updates: Partial<StockItem>) => {
     updateStock(id, updates);
     setEditingStock(null);
-    markAssetEditedWithSound();
-  }, [updateStock, markAssetEditedWithSound]);
+    play('save');
+  }, [updateStock, play]);
 
   const handleDeleteStock = useCallback((id: string) => {
     if (confirm('정말 삭제하시겠습니까?')) {
       deleteStock(id);
-      markAssetEdited();
       play('delete');
     }
-  }, [deleteStock, markAssetEdited, play]);
+  }, [deleteStock, play]);
 
   const handleAddProduct = useCallback(async (product: Omit<FinancialProduct, 'id'>) => {
     try {
       await addFinancialProduct(product);
-      markAssetEditedWithSound();
+      play('save');
     } catch (error) {
       const msg = error instanceof Error ? error.message : '자산 추가에 실패했습니다.';
       alert(`❌ 자산 추가 실패\n\n${msg}`);
     }
-  }, [addFinancialProduct, markAssetEditedWithSound]);
+  }, [addFinancialProduct, play]);
 
   const handleUpdateProduct = useCallback((id: string, updates: Partial<FinancialProduct>) => {
     updateFinancialProduct(id, updates);
     setEditingProduct(null);
-    markAssetEditedWithSound();
-  }, [updateFinancialProduct, markAssetEditedWithSound]);
+    play('save');
+  }, [updateFinancialProduct, play]);
 
   const handleDeleteProduct = useCallback((id: string) => {
     if (confirm('정말 삭제하시겠습니까?')) {
       deleteFinancialProduct(id);
-      markAssetEdited();
       play('delete');
     }
-  }, [deleteFinancialProduct, markAssetEdited, play]);
+  }, [deleteFinancialProduct, play]);
 
   const handleAddLoan = useCallback(async (loan: Omit<LoanItem, 'id'>) => {
     try {
       await addLoan(loan);
-      markAssetEditedWithSound();
+      play('save');
     } catch (error) {
       const msg = error instanceof Error ? error.message : '대출 추가에 실패했습니다.';
       alert(`❌ 대출 추가 실패\n\n${msg}`);
     }
-  }, [addLoan, markAssetEditedWithSound]);
+  }, [addLoan, play]);
 
   const handleUpdateLoan = useCallback((id: string, updates: Partial<LoanItem>) => {
     updateLoan(id, updates);
     setEditingLoan(null);
-    markAssetEditedWithSound();
-  }, [updateLoan, markAssetEditedWithSound]);
+    play('save');
+  }, [updateLoan, play]);
 
   const handleDeleteLoan = useCallback((id: string) => {
     if (confirm('정말 삭제하시겠습니까?')) {
       deleteLoan(id);
-      markAssetEdited();
       play('delete');
     }
-  }, [deleteLoan, markAssetEdited, play]);
+  }, [deleteLoan, play]);
 
   const openLoanEdit = (loan: LoanItem) => {
     setEditingLoan(loan);
@@ -839,6 +858,10 @@ function App() {
               }}
               onDeleteTransaction={handleDeleteTransaction}
               onBatchAddTransactions={handleBatchAddTransactions}
+              netWorthSnapshot={monthlyCloseContext?.snapshot}
+              monthlyClosePreview={monthlyCloseContext!.preview}
+              isCurrentMonth={selectedYear === realCurrentYear && selectedMonth === currentMonth}
+              onCloseMonth={handleCloseMonth}
               partnerNames={[profile.partner1.name, profile.partner2.name]}
               partnerEmojis={[profile.partner1.emoji || '👨', profile.partner2.emoji || '👩']}
             />

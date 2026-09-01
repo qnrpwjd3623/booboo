@@ -12,6 +12,8 @@ function resolveIcon(categoryName: string, customCategories: CustomCategory[]): 
 }
 import { PersonSpendingCard } from './PersonSpendingCard';
 import { ImageImportModal } from './ImageImportModal';
+import { MonthlyCloseCard, type MonthlyClosePreview } from './MonthlyCloseCard';
+import type { NetWorthSnapshot } from '@/types';
 
 const CHART_COLORS = [
   '#FF6B6B','#FF9F43','#FECA57','#48DBFB','#1DD1A1',
@@ -30,6 +32,10 @@ interface MonthlyTransactionViewProps {
   onEditTransaction: (transaction: Transaction) => void;
   onDeleteTransaction: (id: string) => void;
   onBatchAddTransactions: (txns: Omit<Transaction, 'id'>[]) => Promise<void>;
+  netWorthSnapshot?: NetWorthSnapshot;
+  monthlyClosePreview: MonthlyClosePreview;
+  isCurrentMonth: boolean;
+  onCloseMonth: () => Promise<void>;
   partnerNames: [string, string];
   partnerEmojis: [string, string];
 }
@@ -49,6 +55,10 @@ export function MonthlyTransactionView({
   onEditTransaction,
   onDeleteTransaction,
   onBatchAddTransactions,
+  netWorthSnapshot,
+  monthlyClosePreview,
+  isCurrentMonth,
+  onCloseMonth,
   partnerNames,
   partnerEmojis,
   customCategories,
@@ -246,6 +256,15 @@ export function MonthlyTransactionView({
               transition={{ duration: 0.7, ease: 'easeOut' }}
             />
           </div>
+
+          <MonthlyCloseCard
+            year={year}
+            month={month}
+            snapshot={netWorthSnapshot}
+            preview={monthlyClosePreview}
+            isCurrentMonth={isCurrentMonth}
+            onConfirm={onCloseMonth}
+          />
         </motion.div>
 
         {/* 개인 소비 카드 */}
