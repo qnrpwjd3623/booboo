@@ -501,6 +501,20 @@ function App() {
       item => item.year === selectedYear && item.month === selectedMonth,
     );
     const selectedKey = selectedYear * 100 + selectedMonth;
+    const firstExactSnapshotKey = netWorthSnapshots
+      .filter(item => item.year === selectedYear && !item.isEstimated)
+      .reduce<number | null>((first, item) => {
+        const itemKey = item.year * 100 + item.month;
+        return first == null || itemKey < first ? itemKey : first;
+      }, null);
+    // 월 마감 기능 도입 전에 역산해 둔 과거 기록은 최초 실제 마감월보다
+    // 앞선 경우 기존 금액 그대로 마감된 이력으로 취급한다.
+    const isClosed = Boolean(
+      snapshot && (
+        !snapshot.isEstimated
+        || (firstExactSnapshotKey != null && selectedKey < firstExactSnapshotKey)
+      ),
+    );
     const previousSnapshot = [...netWorthSnapshots]
       .filter(item => !item.isEstimated && item.year * 100 + item.month < selectedKey)
       .sort((a, b) => b.year - a.year || b.month - a.month)[0];
@@ -528,7 +542,7 @@ function App() {
       netWorth,
     };
 
-    return { snapshot, preview };
+    return { snapshot, preview, isClosed };
   }, [selectedMonth, selectedYear, transactions, netWorthSnapshots, liveNetWorth]);
 
   const handleCloseMonth = useCallback(async () => {
@@ -859,6 +873,7 @@ function App() {
               onDeleteTransaction={handleDeleteTransaction}
               onBatchAddTransactions={handleBatchAddTransactions}
               netWorthSnapshot={monthlyCloseContext?.snapshot}
+              isNetWorthClosed={monthlyCloseContext!.isClosed}
               monthlyClosePreview={monthlyCloseContext!.preview}
               isCurrentMonth={selectedYear === realCurrentYear && selectedMonth === currentMonth}
               onCloseMonth={handleCloseMonth}

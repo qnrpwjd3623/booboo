@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, CheckCircle2, Landmark, Loader2, TrendingUp, WalletCards } from 'lucide-react';
+import { CalendarDays, Check, CheckCircle2, Landmark, Loader2, TrendingUp, WalletCards } from 'lucide-react';
 import { Modal } from './Modal';
 import { formatCurrency } from '@/utils/format';
 import type { NetWorthSnapshot } from '@/types';
@@ -21,6 +21,7 @@ interface MonthlyCloseCardProps {
   year: number;
   month: number;
   snapshot?: NetWorthSnapshot;
+  isClosed: boolean;
   preview: MonthlyClosePreview;
   isCurrentMonth: boolean;
   onConfirm: () => Promise<void>;
@@ -38,6 +39,7 @@ export function MonthlyCloseCard({
   year,
   month,
   snapshot,
+  isClosed,
   preview,
   isCurrentMonth,
   onConfirm,
@@ -45,7 +47,6 @@ export function MonthlyCloseCard({
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
-  const isClosed = Boolean(snapshot && !snapshot.isEstimated);
   const displayedNetWorth = isClosed && snapshot ? snapshot.netWorth : preview.netWorth;
 
   const handleConfirm = async () => {
@@ -76,9 +77,14 @@ export function MonthlyCloseCard({
           <button
             type="button"
             onClick={() => setIsOpen(true)}
-            className="flex-shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
+            className={`flex flex-shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+              isClosed
+                ? 'text-gray-500 hover:bg-gray-100 hover:text-gray-800'
+                : 'border border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-800'
+            }`}
           >
-            {isClosed ? '내역 보기' : '자산 마감'}
+            {!isClosed && <CalendarDays className="h-3.5 w-3.5" />}
+            {isClosed ? '내역 보기' : `${month}월 자산 마감`}
           </button>
         </div>
       </div>
