@@ -1,3 +1,5 @@
+import { authorizationHeaders } from './authenticatedApi';
+
 // 한국 주식 시세 API (Yahoo Finance + CORS 프록시)
 
 export interface StockPrice {
@@ -12,7 +14,8 @@ export interface StockPrice {
 // Vercel 서버리스 함수로 Yahoo Finance 호출 (CORS 프록시 불필요)
 async function fetchYahooData(path: string): Promise<Record<string, unknown>> {
   const res = await fetch(`/api/stock?ticker=${encodeURIComponent(path)}`, {
-    signal: AbortSignal.timeout(10000),
+    headers: await authorizationHeaders(),
+    signal: AbortSignal.timeout(20000),
   });
   if (!res.ok) throw new Error(`API error ${res.status}`);
   return res.json();
@@ -43,7 +46,7 @@ export function isKoreanTicker(ticker: string): boolean {
 // USD/KRW 환율 조회
 export async function fetchUSDToKRW(): Promise<number> {
   try {
-    const data = await fetchYahooData('USDKRW=X?interval=1d&range=1d');
+    const data = await fetchYahooData('USDKRW=X');
     return parseUSDKRW(data);
   } catch {
     return 1350; // fallback rate
@@ -102,7 +105,7 @@ function parseYahooChart(data: Record<string, unknown>, originalTicker: string):
 // 미국 주식 가격 조회 (달러 단위)
 export async function fetchUSStockPrice(ticker: string): Promise<StockPrice | null> {
   try {
-    const data = await fetchYahooData(`${ticker.toUpperCase()}?interval=1d&range=1d`);
+    const data = await fetchYahooData(`${ticker.toUpperCase()}`);
     return parseYahooChart(data, ticker.toUpperCase());
   } catch (error) {
     console.error('Error fetching US stock price:', error);
@@ -129,7 +132,7 @@ export async function fetchStockPrice(ticker: string): Promise<StockPrice | null
 
     // 한국 주식 — parseYahooChart로 null 안전하게 처리
     const yahooTicker = KOREA_TICKER_MAP[ticker] || `${ticker}.KS`;
-    const data = await fetchYahooData(`${yahooTicker}?interval=1d&range=1d`);
+    const data = await fetchYahooData(`${yahooTicker}`);
     return parseYahooChart(data, ticker);
   } catch (error) {
     console.error('Error fetching stock price:', error);

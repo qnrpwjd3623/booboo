@@ -1,3 +1,5 @@
+import type { User } from '@supabase/supabase-js';
+import { AccountBoundary } from '@/components/AccountBoundary';
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -139,8 +141,7 @@ function waGwa(name: string): string {
   return '와';
 }
 
-function App() {
-  const { user, isLoading: authLoading, signIn, signOut } = useAuth();
+function AuthenticatedApp({ user, signOut }: { user: User; signOut: () => Promise<void> }) {
   const { play, enabled: soundOn, toggle: toggleSound } = useUiSound();
   const userId = user?.id ?? null;
 
@@ -160,6 +161,7 @@ function App() {
   // 부부동산봇 — Supabase에서 이번 달 코멘트 불러오기
   useEffect(() => {
     if (!userId) return;
+    let cancelled = false;
 
     const now = new Date();
     const y = now.getFullYear();
@@ -172,7 +174,7 @@ function App() {
         .eq('year', y)
         .eq('month', m)
         .eq('type', 'bot');
-      if (data) {
+      if (!cancelled && data) {
         for (const row of data) {
           try {
             if (row.type === 'bot') setBotMessage(JSON.parse(row.comment) as BotMessage);
@@ -183,6 +185,7 @@ function App() {
       }
     };
     load();
+    return () => { cancelled = true; };
   }, [userId]);
 
   const [isTransactionFormOpen, setIsTransactionFormOpen] = useState(false);
@@ -676,23 +679,6 @@ function App() {
     setIsProductFormOpen(true);
   };
 
-  // 인증 로딩 중
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
-          <p className="text-gray-500 font-medium">인증 확인 중...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // 로그인하지 않은 경우 로그인 페이지 표시
-  if (!user) {
-    return <LoginPage onLogin={signIn} />;
-  }
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center">
@@ -850,6 +836,7 @@ function App() {
             transition={{ duration: 0.22, ease: 'easeInOut' }}
           >
             <MonthlyTransactionView
+              userId={user.id}
               year={selectedYear}
               month={selectedMonth}
               transactions={transactions}
@@ -1495,6 +1482,32 @@ function FinancialProductsList({
 
       {ghost}
     </motion.div>
+  );
+}
+
+function App() {
+  const { user, isLoading: authLoading, signIn, signOut } = useAuth();
+  // 인증 로딩 중
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
+          <p className="text-gray-500 font-medium">인증 확인 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 로그인하지 않은 경우 로그인 페이지 표시
+  if (!user) {
+    return <LoginPage onLogin={signIn} />;
+  }
+
+  return (
+    <AccountBoundary userId={user.id}>
+      <AuthenticatedApp user={user} signOut={signOut} />
+    </AccountBoundary>
   );
 }
 

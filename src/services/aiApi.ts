@@ -1,3 +1,5 @@
+import { authorizationHeaders } from './authenticatedApi';
+
 // Gemini API 연동 서비스
 // 부부동산봇이 DB 데이터에 접근하는 방식:
 // 프론트엔드에서 데이터를 조회 → FinancialContext로 정리 → Gemini API prompt에 전달
@@ -35,50 +37,25 @@ export interface FinancialContext {
   };
 }
 
-// Gemini API 키
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
-
-async function callGeminiAPI(prompt: string, systemInstruction?: string): Promise<string> {
-  const body: Record<string, unknown> = {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 1024,
-      responseMimeType: 'application/json',
-    },
-  };
-  if (systemInstruction) {
-    body.systemInstruction = { parts: [{ text: systemInstruction }] };
-  }
-
-  const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+async function callGeminiAPI(prompt: string, systemInstruction?: string, image?: { data: string; mimeType: string }): Promise<string> {
+  const response = await fetch('/api/ai', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    headers: { ...await authorizationHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, systemInstruction, image }),
+    signal: AbortSignal.timeout(40000),
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API error: ${response.status} ${errorText}`);
-  }
-
   const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Empty response from Gemini');
-  return text;
+  if (!response.ok) throw new Error(data.error || `AI API error: ${response.status}`);
+  if (typeof data.text !== 'string') throw new Error('AI 응답이 비어있습니다.');
+  return data.text;
 }
 
 // 금융 조언 가져오기
 export async function getFinancialAdvice(context: FinancialContext): Promise<FinancialAdvice> {
-  if (!GEMINI_API_KEY) {
-    console.warn('Gemini API key is not set. Using dummy advice.');
-    return getDummyAdvice(context);
-  }
 
   try {
     const prompt = generatePrompt(context);
-    const systemInstruction = `너는 "부부동산집봇"이라는 AI 재무 로봇이야. 성격은 약간 킹받고 퉁명스럽지만 그 속에 따뜻함이 숨어있어. 🤖 이모지를 자주 써. 반말 써. 팩폭을 날리되 결국엔 응원해줘. 태형과 샐리를 직접 이름으로 불러줘. 반드시 요청된 JSON 형식으로만 응답해.`;
+    const systemInstruction = `너는 "부부동산집봇"이라는 AI 재무 로봇이야. 성격은 약간 킹받고 퉁명스럽지만 그 속에 따뜻함이 숨어있어. 🤖 이모지를 자주 써. 반말 써. 팩폭을 날리되 결국엔 응원해줘. ${context.coupleNames.join("와 ")}를 직접 이름으로 불러줘. 반드시 요청된 JSON 형식으로만 응답해.`;
     const responseText = await callGeminiAPI(prompt, systemInstruction);
     return parseAdviceResponse(responseText, context);
   } catch (error) {
@@ -292,10 +269,6 @@ export async function getMonthlyChallenge(context: FinancialContext) {
   const prompt = buildChallengePrompt(context);
 
   try {
-    if (!GEMINI_API_KEY) {
-      console.warn('Gemini API Key is missing. Using mock challenge.');
-      return getMockChallenge();
-    }
 
     const systemInstruction = `너는 '부부동산집봇'이야. 킹받는 로봇 캐릭터로 반말 써. 🤖 이모지 자주 써. 팩폭하되 따뜻하게. 반드시 요청된 JSON 형식으로만 응답해.`;
     const responseText = await callGeminiAPI(prompt, systemInstruction);
@@ -334,7 +307,6 @@ export async function parseSpendingScreenshot(
   year: number,
   month: number,
 ): Promise<ParsedTxnItem[]> {
-  if (!GEMINI_API_KEY) throw new Error('Gemini API key not set');
 
   const expenseCats = '생활, 쇼핑, 자동차비, 외식비, 여행/숙박, 대중교통, 문화/여가, 의료/건강, 카페, 구독료, 주거/통신, 교육, 육아, 경조사, 식비/집밥';
   const incomeCats = '급여, 부업/프리랜서, 투자수익, 용돈, 상여금, 기타';
@@ -365,58 +337,11 @@ export async function parseSpendingScreenshot(
   ]
 }`;
 
-  // Use camelCase per Google REST API spec for multimodal requests
-  const body = {
-    contents: [{
-      parts: [
-        {
-          inlineData: {
-            mimeType: mimeType,
-            data: base64Image,
-          },
-        },
-        { text: prompt },
-      ],
-    }],
-    generationConfig: {
-      temperature: 0.1,
-      maxOutputTokens: 4096,
-      // Note: responseMimeType NOT used here — not supported for multimodal requests
-    },
-  };
-
-  const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    console.error('Gemini Vision API raw error:', errText);
-    let errMsg = `API ${response.status}`;
-    try {
-      const errJson = JSON.parse(errText);
-      errMsg = errJson?.error?.message || errMsg;
-    } catch { /* ignore */ }
-    throw new Error(errMsg);
-  }
-
-  const data = await response.json();
-  console.log('Gemini Vision raw response:', JSON.stringify(data).slice(0, 800));
-
-  // Check for blocked content
-  const finishReason = data.candidates?.[0]?.finishReason;
-  if (finishReason && finishReason !== 'STOP') {
-    throw new Error(`응답 차단됨 (${finishReason}). 다른 이미지를 시도해주세요.`);
-  }
-
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Gemini 응답이 비어있어요. API 키를 확인해주세요.');
+  const text = await callGeminiAPI(prompt, undefined, { data: base64Image, mimeType });
 
   // Extract JSON — model may wrap in markdown code fences
   const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error(`JSON 파싱 실패. 응답: ${text.slice(0, 100)}`);
+  if (!jsonMatch) throw new Error('AI 응답을 해석하지 못했습니다. 다시 시도해주세요.');
 
   const parsed = JSON.parse(jsonMatch[0]);
   return (parsed.transactions || []) as ParsedTxnItem[];
@@ -431,9 +356,6 @@ export async function getPersonCharacterComment(
   topCategories: Array<{ category: string; amount: number }>,
   partnerName: string,
 ): Promise<string> {
-  if (!GEMINI_API_KEY) {
-    return getPersonMockComment(name, income, expense, topCategories);
-  }
 
   try {
     const topCatList = topCategories

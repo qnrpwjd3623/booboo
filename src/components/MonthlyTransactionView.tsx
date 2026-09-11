@@ -22,6 +22,7 @@ const CHART_COLORS = [
 ];
 
 interface MonthlyTransactionViewProps {
+  userId: string;
   year: number;
   month: number;
   transactions: Transaction[];
@@ -47,6 +48,7 @@ const MONTH_NAMES = [
 ];
 
 export function MonthlyTransactionView({
+  userId,
   year,
   month,
   transactions,
@@ -273,6 +275,7 @@ export function MonthlyTransactionView({
         {/* 개인 소비 카드 */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <PersonSpendingCard
+            userId={userId}
             name={partnerNames[0]}
             emoji={partnerEmojis[0]}
             transactions={partner1Txns}
@@ -282,6 +285,7 @@ export function MonthlyTransactionView({
             month={month}
           />
           <PersonSpendingCard
+            userId={userId}
             name={partnerNames[1]}
             emoji={partnerEmojis[1]}
             transactions={partner2Txns}

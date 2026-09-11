@@ -1,32 +1,26 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { authorize } from '../server/security.ts';
 
-// Vercel 서버리스 함수 — 서버에서 Yahoo Finance 직접 호출 (CORS 우회)
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-
-  const { ticker } = req.query;
-  if (!ticker || typeof ticker !== 'string') {
-    return res.status(400).json({ error: 'ticker required' });
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET');
+    return res.status(405).json({ error: 'Method not allowed' });
   }
-
-  // ticker에 이미 쿼리스트링 포함 (예: 005930.KS?interval=1d&range=1d)
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`;
-
+  if (!await authorize(req, res, 'stock')) return;
+  const { ticker } = req.query;
+  if (typeof ticker !== 'string' || !/^[A-Z0-9^][A-Z0-9.^=-]{0,19}$/.test(ticker)) {
+    return res.status(400).json({ error: 'Invalid ticker' });
+  }
+  // Fixed host, path encoding, and fixed query prevent arbitrary upstream requests.
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`;
   try {
     const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-      },
+      headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' },
+      signal: AbortSignal.timeout(8000), redirect: 'error',
     });
-
-    if (!response.ok) {
-      return res.status(response.status).json({ error: `Yahoo Finance returned ${response.status}` });
-    }
-
-    const data = await response.json();
-    return res.json(data);
-  } catch (error) {
-    return res.status(500).json({ error: String(error) });
+    if (!response.ok) return res.status(502).json({ error: '주가 정보를 가져오지 못했습니다.' });
+    return res.json(await response.json());
+  } catch {
+    return res.status(502).json({ error: '주가 정보를 가져오지 못했습니다.' });
   }
 }

@@ -7,6 +7,7 @@ import { getPersonCharacterComment } from '@/services/aiApi';
 import { supabase } from '@/services/supabaseClient';
 
 interface PersonSpendingCardProps {
+  userId: string;
   name: string;
   emoji: string;
   transactions: Transaction[]; // 이 사람의 트랜잭션만
@@ -21,7 +22,7 @@ const CARD_GRADIENTS = [
   'from-pink-400 to-pink-600',
 ];
 
-export function PersonSpendingCard({ name, emoji, transactions, partnerName, index, year, month }: PersonSpendingCardProps) {
+export function PersonSpendingCard({ userId, name, emoji, transactions, partnerName, index, year, month }: PersonSpendingCardProps) {
   const [comment, setComment] = useState<string>('');
   const [isLoadingComment, setIsLoadingComment] = useState(false);
 
@@ -32,6 +33,7 @@ export function PersonSpendingCard({ name, emoji, transactions, partnerName, ind
       const { data } = await supabase
         .from('ai_comments')
         .select('comment')
+        .eq('user_id', userId)
         .eq('type', 'person')
         .eq('name', name)
         .eq('year', year)
@@ -41,7 +43,7 @@ export function PersonSpendingCard({ name, emoji, transactions, partnerName, ind
     };
     load();
     return () => { cancelled = true; };
-  }, [name, year, month]);
+  }, [userId, name, year, month]);
 
   const income = useMemo(
     () => transactions.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0),
@@ -81,12 +83,13 @@ export function PersonSpendingCard({ name, emoji, transactions, partnerName, ind
       // DELETE → INSERT 방식 (upsert 대신 - 더 안정적)
       await supabase.from('ai_comments')
         .delete()
+        .eq('user_id', userId)
         .eq('type', 'person')
         .eq('name', name)
         .eq('year', year)
         .eq('month', month);
       const { error: insertError } = await supabase.from('ai_comments').insert({
-        type: 'person', name, year, month, comment: c,
+        user_id: userId, type: 'person', name, year, month, comment: c,
       });
       if (insertError) console.error('AI 한마디 저장 실패:', insertError);
     } catch (e) {
