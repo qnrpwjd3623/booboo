@@ -64,6 +64,8 @@ export function FinancialProductForm({
   const [monthlyPayment, setMonthlyPayment] = useState(''); // 적금 월납입금
   const [paidMonths, setPaidMonths] = useState(''); // 적금 납입회차
   const [totalMonths, setTotalMonths] = useState(''); // 적금 목표회차
+  // 적금 납입총액 직접 입력 (null = 자동 계산). paidAt = 직접 입력 당시 납입 회차
+  const [manualSavingsTotal, setManualSavingsTotal] = useState<{ text: string; value: number; paidAt: number } | null>(null);
   const [address, setAddress] = useState(''); // 부동산 주소
   const [memo, setMemo] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -138,6 +140,7 @@ export function FinancialProductForm({
       setCoinQuantity('');
       setHoldings([]);
     }
+    setManualSavingsTotal(null);
     setCoinFetchState('idle');
     setCoinFetchedInfo(null);
   }, [editProduct, isOpen]);
@@ -150,6 +153,7 @@ export function FinancialProductForm({
       setMonthlyPayment('');
       setPaidMonths('');
       setTotalMonths('');
+      setManualSavingsTotal(null);
       setAddress('');
       setCoinTicker('');
       setCoinQuantity('');
@@ -263,10 +267,22 @@ export function FinancialProductForm({
   const paidMonthsNum = parseInt(paidMonths || '0');
   const totalMonthsNum = parseInt(totalMonths || '0');
 
-  // 적금: 납입총액 = 월납입금 * 납입회차
-  const savingsPrincipal = monthlyPaymentNum * paidMonthsNum;
-  // 적금: 목표금액 = 월납입금 * 목표회차
-  const savingsTarget = monthlyPaymentNum * totalMonthsNum;
+  // 적금 납입총액
+  // - 월 납입금을 바꿔도 이미 납입한 회차는 다시 계산하지 않는다.
+  // - 기준 금액(직접 입력값 > 기존 저장값 > 0)에서 늘어난/줄어든 회차만 현재 월 납입금으로 더하거나 뺀다.
+  const editingSavings = editProduct?.type === 'savings';
+  const savingsBase = manualSavingsTotal
+    ? { total: manualSavingsTotal.value, paid: manualSavingsTotal.paidAt }
+    : editingSavings
+      ? { total: editProduct.principal, paid: editProduct.paidMonths ?? 0 }
+      : { total: 0, paid: 0 };
+  const savingsPrincipal = Math.max(0, savingsBase.total + (paidMonthsNum - savingsBase.paid) * monthlyPaymentNum);
+  // 적금: 목표금액 = 현재 납입총액 + 남은 회차 * 현재 월납입금
+  const savingsTarget = savingsPrincipal + Math.max(0, totalMonthsNum - paidMonthsNum) * monthlyPaymentNum;
+  const savingsTotalDisplay =
+    manualSavingsTotal && manualSavingsTotal.paidAt === paidMonthsNum
+      ? manualSavingsTotal.text
+      : savingsPrincipal.toLocaleString();
 
   // 투자상품: 수익률/손익
   const investReturnValue = currentValueNum - principalNum;
@@ -873,6 +889,27 @@ export function FinancialProductForm({
                     />
                   </div>
                 </div>
+              </div>
+              {/* 현재 납입총액 — 자동 계산되지만 직접 수정 가능 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">현재 납입총액</label>
+                <div className="relative">
+                  <Wallet className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={savingsTotalDisplay}
+                    onChange={(e) => {
+                      const text = formatNumber(e.target.value);
+                      setManualSavingsTotal({ text, value: parseNum(text), paidAt: paidMonthsNum });
+                    }}
+                    placeholder="0"
+                    className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all"
+                  />
+                </div>
+                <p className="mt-1.5 text-xs text-gray-400">
+                  월 납입금을 바꿔도 기존 납입총액은 유지되고, 늘어난 회차만 현재 월 납입금으로 더해집니다. 은행 앱 잔액과 다르면 직접 고쳐주세요.
+                </p>
               </div>
               {/* 적금 진행률 preview */}
               {monthlyPaymentNum > 0 && totalMonthsNum > 0 && (

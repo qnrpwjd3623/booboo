@@ -979,9 +979,23 @@ function App() {
                 const stockItems = realCurrentYearData.stocks
                   .filter(i => i.shares * i.currentPrice > 0)
                   .map(i => ({ name: i.name, value: i.shares * i.currentPrice }));
-                const productItems = realCurrentYearData.financialProducts
-                  .filter(p => p.currentValue > 0)
-                  .map(p => ({ name: p.name, value: p.currentValue }));
+                // 예금(deposit) 유형은 잔액을 합쳐 '예금' 한 줄로 표시, 나머지는 개별 표시
+                const positiveProducts = realCurrentYearData.financialProducts.filter(p => p.currentValue > 0);
+                const depositTotal = positiveProducts
+                  .filter(p => p.type === 'deposit')
+                  .reduce((s, p) => s + p.currentValue, 0);
+                const productItems: { name: string; value: number }[] = [];
+                let depositInserted = false;
+                for (const p of positiveProducts) {
+                  if (p.type === 'deposit') {
+                    if (!depositInserted) {
+                      productItems.push({ name: '예금', value: depositTotal });
+                      depositInserted = true;
+                    }
+                  } else {
+                    productItems.push({ name: p.name, value: p.currentValue });
+                  }
+                }
                 return (
                   <SummaryCards
                     currentNetWorth={realCurrentYearData.currentNetWorth}
