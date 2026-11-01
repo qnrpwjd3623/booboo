@@ -177,45 +177,34 @@ function NetWorthBreakdownCard({
           </p>
 
           <div className="space-y-2.5">
-            {/* Stocks — always show as single aggregated line */}
-            {breakdown.stocks > 0 && (
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-orange-400 flex-shrink-0" />
-                  <span className="text-xs text-gray-600">주식</span>
-                </div>
-                <span className="text-xs font-semibold tabular-nums text-gray-900">
-                  +{formatCurrency(breakdown.stocks)}
-                </span>
-              </div>
-            )}
-
-            {/* Financial products — show individual items if available, otherwise aggregate */}
-            {breakdown.products > 0 && (
-              breakdown.productItems && breakdown.productItems.length > 0 ? (
-                breakdown.productItems.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-purple-400 flex-shrink-0" />
-                      <span className="text-xs text-gray-600 truncate max-w-[100px]">{item.name}</span>
-                    </div>
-                    <span className="text-xs font-semibold tabular-nums text-gray-900">
-                      +{formatCurrency(item.value)}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <div className="flex items-center justify-between gap-3">
+            {/* 자산 항목 — 주식(합산 1줄) + 금융상품을 금액 큰 순으로 정렬 */}
+            {(() => {
+              const assetRows: { name: string; value: number; dot: string }[] = [];
+              if (breakdown.stocks > 0) {
+                assetRows.push({ name: '주식', value: breakdown.stocks, dot: 'bg-orange-400' });
+              }
+              if (breakdown.products > 0) {
+                if (breakdown.productItems && breakdown.productItems.length > 0) {
+                  for (const item of breakdown.productItems) {
+                    assetRows.push({ name: item.name, value: item.value, dot: 'bg-purple-400' });
+                  }
+                } else {
+                  assetRows.push({ name: '금융상품', value: breakdown.products, dot: 'bg-purple-400' });
+                }
+              }
+              assetRows.sort((a, b) => b.value - a.value);
+              return assetRows.map((row, idx) => (
+                <div key={`${row.name}-${idx}`} className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-purple-400 flex-shrink-0" />
-                    <span className="text-xs text-gray-600">금융상품</span>
+                    <div className={`w-2 h-2 rounded-full ${row.dot} flex-shrink-0`} />
+                    <span className="text-xs text-gray-600 truncate max-w-[100px]">{row.name}</span>
                   </div>
                   <span className="text-xs font-semibold tabular-nums text-gray-900">
-                    +{formatCurrency(breakdown.products)}
+                    +{formatCurrency(row.value)}
                   </span>
                 </div>
-              )
-            )}
+              ));
+            })()}
 
             {/* Debt */}
             {breakdown.debt > 0 && (
