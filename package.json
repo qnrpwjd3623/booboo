@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types --test tests/*.test.ts tests/*.test.mjs"
+    "test": "node --experimental-strip-types --import ./tests/ts-resolve.mjs --test tests/*.test.ts tests/*.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

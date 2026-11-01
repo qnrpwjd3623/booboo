@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { z } from 'zod';
-import { authorize } from '../server/security.ts';
+import { authorize } from '../server/security.js';
 
 const inputSchema = z.object({
   prompt: z.string().min(1).max(20000),
